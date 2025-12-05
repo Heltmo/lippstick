@@ -1,47 +1,25 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
-*/
-import {useCallback, useEffect, useState} from 'react';
+ */
+import { useCallback, useState } from 'react';
 
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
+/**
+ * Hook for managing API key state.
+ * In standalone mode, the API key is handled server-side,
+ * so this hook mainly manages error dialog state.
+ */
 export const useApiKey = () => {
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
 
+  // In server-side mode, validation always passes
+  // Errors are handled when API calls fail
   const validateApiKey = useCallback(async (): Promise<boolean> => {
-    const aistudio = (window as any).aistudio as AIStudio | undefined;
-    
-    if (aistudio) {
-      try {
-        const hasKey = await aistudio.hasSelectedApiKey();
-        if (!hasKey) {
-          setShowApiKeyDialog(true);
-          return false;
-        }
-      } catch (error) {
-        console.warn('API Key check failed', error);
-        setShowApiKeyDialog(true);
-        return false;
-      }
-    }
     return true;
   }, []);
 
-  // Run check automatically on mount
-  useEffect(() => {
-    validateApiKey();
-  }, [validateApiKey]);
-
-  const handleApiKeyDialogContinue = useCallback(async () => {
+  const handleApiKeyDialogContinue = useCallback(() => {
     setShowApiKeyDialog(false);
-    const aistudio = (window as any).aistudio as AIStudio | undefined;
-    if (aistudio) {
-      await aistudio.openSelectKey();
-    }
   }, []);
 
   return {
