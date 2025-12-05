@@ -1,0 +1,5 @@
+/* Main styles are handled via Tailwind CDN in index.html */
+body {
+  margin: 0;
+  padding: 0;
+}
