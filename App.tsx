@@ -1,192 +1,322 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
-*/
-import React, { useState } from 'react';
-import { Sparkles, Download, Scan } from 'lucide-react';
+ */
+import React, { useState, useRef, useCallback } from 'react';
+import { Sparkles, Download, Upload, CheckCircle, LogOut } from 'lucide-react';
 import { Button } from './components/Button';
-import { FileUploader } from './components/FileUploader';
 import { generateTryOn } from './services/geminiService';
 import { LoadingState } from './types';
-import { useApiKey } from './hooks/useApiKey';
-import ApiKeyDialog from './components/ApiKeyDialog';
+import { useAuth } from './contexts/AuthContext';
+import { supabase } from './lib/supabase';
+import LoginModal from './components/LoginModal';
+import PaywallModal from './components/PaywallModal';
 
 export default function App() {
-  // State
-  const [tryOnLipstick, setTryOnLipstick] = useState<string | null>(null);
-  const [tryOnSelfie, setTryOnSelfie] = useState<string | null>(null);
-  const [tryOnResult, setTryOnResult] = useState<string | null>(null);
-  const [loading, setLoading] = useState<LoadingState>({ isGenerating: false, message: '' });
+   const [tryOnLipstick, setTryOnLipstick] = useState<string | null>(null);
+   const [tryOnSelfie, setTryOnSelfie] = useState<string | null>(null);
+   const [tryOnResult, setTryOnResult] = useState<string | null>(null);
+   const [loading, setLoading] = useState<LoadingState>({ isGenerating: false, message: '' });
 
-  // API Key Management
-  const { showApiKeyDialog, setShowApiKeyDialog, validateApiKey, handleApiKeyDialogContinue } = useApiKey();
+   const [showLoginModal, setShowLoginModal] = useState(false);
+   const [showPaywall, setShowPaywall] = useState(false);
 
-  // Helper to read file as Data URL
-  const handleFile = (file: File, setter: (val: string | null) => void) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-       if (e.target?.result) {
-          setter(e.target.result as string);
-       }
-    };
-    reader.readAsDataURL(file);
-  };
+   const lipstickInputRef = useRef<HTMLInputElement>(null);
+   const selfieInputRef = useRef<HTMLInputElement>(null);
 
-  // Error Handler
-  const handleApiError = (error: any) => {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    let shouldOpenDialog = false;
+   const { user, profile, signOut, refreshProfile, loading: authLoading } = useAuth();
 
-    if (errorMessage.includes('Requested entity was not found')) {
-      shouldOpenDialog = true;
-    } else if (
-      errorMessage.includes('API_KEY_INVALID') ||
-      errorMessage.includes('API key not valid') ||
-      errorMessage.includes('PERMISSION_DENIED') || 
-      errorMessage.includes('403')
-    ) {
-      shouldOpenDialog = true;
-    }
+   // Debug: log auth state
+   console.log('Auth state:', { user: user?.email, profile, authLoading });
 
-    if (shouldOpenDialog) {
-      setShowApiKeyDialog(true);
-    } else {
-      alert(`Operation failed: ${errorMessage}`);
-    }
-  };
+   const canTry = () => {
+      if (!user) return false;
+      if (!profile) return true; // Allow if profile not loaded yet
+      if (profile.free_tries_used === 0) return true;
+      if (profile.paid_tries_remaining > 0) return true;
+      return false;
+   };
 
-  // Main Action
-  const handleTryOn = async () => {
-     if (!tryOnLipstick || !tryOnSelfie) return;
-     
-     if (!(await validateApiKey())) return;
+   const handleFile = (file: File, setter: (val: string | null) => void) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+         if (e.target?.result) setter(e.target.result as string);
+      };
+      reader.readAsDataURL(file);
+   };
 
-     setLoading({ isGenerating: true, message: 'Applying makeup...' });
-     try {
-        const result = await generateTryOn(tryOnLipstick, tryOnSelfie);
-        setTryOnResult(result);
-     } catch (e: any) {
-        handleApiError(e);
-     } finally {
-        setLoading({ isGenerating: false, message: '' });
-     }
-  };
+   const handlePaste = useCallback((e: React.ClipboardEvent, setter: (val: string | null) => void) => {
+      const items = e.clipboardData.items;
+      for (let i = 0; i < items.length; i++) {
+         if (items[i].type.indexOf('image') !== -1) {
+            const file = items[i].getAsFile();
+            if (file) handleFile(file, setter);
+            break;
+         }
+      }
+   }, []);
 
-  return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans flex flex-col items-center py-12 px-4 selection:bg-indigo-500/30">
-      
-      {/* API Key Dialog Overlay */}
-      {showApiKeyDialog && (
-        <ApiKeyDialog onContinue={handleApiKeyDialogContinue} />
-      )}
+   const handleDrop = useCallback((e: React.DragEvent, setter: (val: string | null) => void) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) handleFile(file, setter);
+   }, []);
 
-      <div className="max-w-4xl w-full animate-fade-in">
-         
-         {/* Header */}
-         <div className="text-center mb-16">
-            <div className="inline-flex items-center justify-center p-4 bg-zinc-900 border border-zinc-800 rounded-2xl mb-6 shadow-2xl">
-               <Scan size={32} className="text-indigo-500" />
-            </div>
-            <h1 className="text-4xl md:text-6xl font-black mb-6 tracking-tight">
-               Virtual Lipstick <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-500">Try-On</span>
-            </h1>
-            <p className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
-               Experience instant virtual makeup. Upload a lipstick swatch (or screenshot) and a selfie to see the magic happen.
-            </p>
-         </div>
+   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
 
-         {/* Main Input Area */}
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-            
-            {/* 1. Lipstick Input */}
-             <div className="space-y-4">
-                <div className="flex items-center justify-between px-1">
-                    <h3 className="font-medium text-zinc-200 flex items-center gap-2">
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-zinc-800 text-xs font-bold text-zinc-400">1</span>
-                        Lipstick Source
-                    </h3>
-                    <span className="text-xs font-medium text-zinc-500 bg-zinc-900 px-2 py-1 rounded">Photo or Screenshot</span>
-                </div>
-                <div className="h-[300px]">
-                    <FileUploader
-                    label="Upload Lipstick"
-                    currentPreview={tryOnLipstick || undefined}
-                    onFileSelect={(f) => handleFile(f, setTryOnLipstick)}
-                    onClear={() => setTryOnLipstick(null)}
-                    />
-                </div>
-            </div>
+   const handleTryOn = async () => {
+      if (!tryOnLipstick || !tryOnSelfie) return;
 
-            {/* 2. Selfie Input */}
-             <div className="space-y-4">
-                <div className="flex items-center justify-between px-1">
-                    <h3 className="font-medium text-zinc-200 flex items-center gap-2">
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-zinc-800 text-xs font-bold text-zinc-400">2</span>
-                        Your Selfie
-                    </h3>
-                    <span className="text-xs font-medium text-zinc-500 bg-zinc-900 px-2 py-1 rounded">Good lighting works best</span>
-                </div>
-                <div className="h-[300px]">
-                    <FileUploader
-                    label="Upload Selfie"
-                    currentPreview={tryOnSelfie || undefined}
-                    onFileSelect={(f) => handleFile(f, setTryOnSelfie)}
-                    onClear={() => setTryOnSelfie(null)}
-                    />
-                </div>
+      // Wait for auth to finish loading
+      if (authLoading) {
+         console.log('Auth still loading, waiting...');
+         return;
+      }
+
+      console.log('handleTryOn - user:', user?.email);
+
+      // Must be logged in
+      if (!user) {
+         console.log('No user, showing login modal');
+         setShowLoginModal(true);
+         return;
+      }
+
+      // Must have tries
+      if (!canTry()) {
+         setShowPaywall(true);
+         return;
+      }
+
+      // Generate
+      setLoading({ isGenerating: true, message: 'Applying makeup...' });
+      try {
+         const result = await generateTryOn(tryOnLipstick, tryOnSelfie);
+         setTryOnResult(result);
+
+         // Update tries in DB
+         if (profile) {
+            try {
+               if (profile.free_tries_used === 0) {
+                  await supabase.from('profiles').update({ free_tries_used: 1 }).eq('id', user.id);
+               } else if (profile.paid_tries_remaining > 0) {
+                  await supabase.from('profiles').update({
+                     paid_tries_remaining: profile.paid_tries_remaining - 1
+                  }).eq('id', user.id);
+               }
+               await refreshProfile();
+            } catch (dbError) {
+               console.error('Failed to update tries:', dbError);
+            }
+         }
+      } catch (e: any) {
+         alert(`Operation failed: ${e.message || e}`);
+      } finally {
+         setLoading({ isGenerating: false, message: '' });
+      }
+   };
+
+   // Show loading while auth initializes
+   if (authLoading) {
+      return (
+         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cream-100 to-cream-200">
+            <div className="text-center">
+               <div className="w-12 h-12 border-4 border-coral-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+               <p className="text-gray-500">Loading...</p>
             </div>
          </div>
+      );
+   }
 
-         {/* Action Button */}
-         <div className="flex justify-center mb-16 relative z-10">
-            <Button
-               size="lg"
-               disabled={!tryOnLipstick || !tryOnSelfie}
-               isLoading={loading.isGenerating}
-               onClick={handleTryOn}
-               icon={<Sparkles size={20} />}
-               className="w-full md:w-auto px-16 py-4 text-lg rounded-full shadow-[0_0_40px_rgba(79,70,229,0.4)] hover:shadow-[0_0_60px_rgba(79,70,229,0.6)] transition-all transform hover:-translate-y-1"
-            >
-               {loading.isGenerating ? "Applying Makeup..." : "Apply Makeup"}
-            </Button>
-         </div>
+   return (
+      <div className="min-h-screen font-sans py-8 px-4 md:py-16">
+         {showLoginModal && !user && <LoginModal onClose={() => setShowLoginModal(false)} />}
+         {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
 
-         {/* Result Area */}
-         {tryOnResult && (
-            <div className="animate-slide-up border-t border-zinc-800 pt-16">
-               <div className="flex items-center gap-4 mb-8">
-                   <div className="h-px bg-zinc-800 flex-1"></div>
-                   <h3 className="text-2xl font-bold text-center text-white">Your New Look</h3>
-                   <div className="h-px bg-zinc-800 flex-1"></div>
+         <div className="max-w-5xl mx-auto animate-fade-in">
+            {/* Header */}
+            <div className="text-center mb-12">
+               <div className="flex items-center justify-end mb-8 min-h-[32px]">
+                  {user ? (
+                     <div className="flex items-center gap-3">
+                        <span className="text-sm text-gray-500">
+                           {profile?.paid_tries_remaining && profile.paid_tries_remaining > 0
+                              ? `${profile.paid_tries_remaining} tries left`
+                              : profile?.free_tries_used === 0 || !profile
+                                 ? '1 free try'
+                                 : '0 tries left'
+                           }
+                        </span>
+                        <button onClick={signOut} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+                           <LogOut className="w-4 h-4" /> Sign out
+                        </button>
+                     </div>
+                  ) : (
+                     <button
+                        onClick={() => setShowLoginModal(true)}
+                        className="text-sm text-coral-500 hover:text-coral-600 font-medium"
+                     >
+                        Sign in
+                     </button>
+                  )}
                </div>
-               
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-zinc-900/40 p-6 md:p-8 rounded-3xl border border-zinc-800/50 backdrop-blur-sm">
-                  {/* Before Preview */}
-                  <div className="space-y-3">
-                      <p className="text-center text-sm font-medium text-zinc-500 uppercase tracking-widest">Original</p>
-                      <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-zinc-700/50 group">
-                         <img src={tryOnSelfie!} className="w-full h-full object-cover opacity-60 grayscale-[30%] transition-all duration-500 group-hover:grayscale-0 group-hover:opacity-100" alt="Original" />
-                      </div>
+
+               <h1 className="font-serif text-5xl md:text-6xl font-semibold text-gray-800 mb-2 italic">
+                  Makeup Atelier
+               </h1>
+               <p className="text-gray-500 tracking-[0.3em] text-sm uppercase">
+                  AI Virtual Try-On
+               </p>
+            </div>
+
+            {/* Upload Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+               {/* Product */}
+               <div className="bg-white rounded-2xl p-6 card-shadow">
+                  <div className="flex items-center gap-3 mb-6">
+                     <span className="flex items-center justify-center w-8 h-8 rounded-full bg-coral-400 text-white text-sm font-semibold">1</span>
+                     <h2 className="text-xl font-semibold text-gray-800">Upload Product</h2>
                   </div>
-                  
-                  {/* After Result */}
-                  <div className="space-y-3">
-                      <p className="text-center text-sm font-bold text-indigo-400 uppercase tracking-widest">Result</p>
-                      <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-indigo-500/50 shadow-2xl">
-                         <img src={tryOnResult} className="w-full h-full object-cover" alt="Result" />
-                         
-                         {/* Download Overlay */}
-                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-6">
-                             <a href={tryOnResult} download="makeup-try-on.png" className="w-full transform translate-y-4 hover:translate-y-0 transition-transform duration-300">
-                                <Button size="md" className="w-full bg-white text-black hover:bg-zinc-200" icon={<Download size={18}/>}>Save Image</Button>
-                             </a>
-                         </div>
-                      </div>
+
+                  <input ref={lipstickInputRef} type="file" accept="image/*" className="hidden"
+                     onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0], setTryOnLipstick)} />
+
+                  <div
+                     onClick={() => lipstickInputRef.current?.click()}
+                     onPaste={(e) => handlePaste(e, setTryOnLipstick)}
+                     onDrop={(e) => handleDrop(e, setTryOnLipstick)}
+                     onDragOver={handleDragOver}
+                     tabIndex={0}
+                     className="dashed-border p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-coral-400/5 transition-colors min-h-[200px] focus:outline-none focus:ring-2 focus:ring-coral-400"
+                  >
+                     {tryOnLipstick ? (
+                        <div className="relative w-full h-40">
+                           <img src={tryOnLipstick} alt="Lipstick" className="w-full h-full object-contain" />
+                           <button onClick={(e) => { e.stopPropagation(); setTryOnLipstick(null); }}
+                              className="absolute top-2 right-2 bg-white rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:bg-gray-100">
+                              <span className="text-gray-500 text-sm">✕</span>
+                           </button>
+                        </div>
+                     ) : (
+                        <>
+                           <div className="text-5xl mb-4">💄</div>
+                           <p className="font-medium text-gray-700 mb-1">Makeup Product</p>
+                           <p className="text-gray-400 text-sm text-center">Drag & drop, paste, or click</p>
+                        </>
+                     )}
                   </div>
                </div>
+
+               {/* Selfie */}
+               <div className="bg-white rounded-2xl p-6 card-shadow">
+                  <div className="flex items-center gap-3 mb-6">
+                     <span className="flex items-center justify-center w-8 h-8 rounded-full bg-coral-400 text-white text-sm font-semibold">2</span>
+                     <h2 className="text-xl font-semibold text-gray-800">Your Selfie</h2>
+                  </div>
+
+                  <input ref={selfieInputRef} type="file" accept="image/*" className="hidden"
+                     onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0], setTryOnSelfie)} />
+
+                  <div
+                     onClick={() => selfieInputRef.current?.click()}
+                     onPaste={(e) => handlePaste(e, setTryOnSelfie)}
+                     onDrop={(e) => handleDrop(e, setTryOnSelfie)}
+                     onDragOver={handleDragOver}
+                     tabIndex={0}
+                     className="dashed-border p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-coral-400/5 transition-colors min-h-[200px] focus:outline-none focus:ring-2 focus:ring-coral-400 mb-4"
+                  >
+                     {tryOnSelfie ? (
+                        <div className="relative w-full h-40">
+                           <img src={tryOnSelfie} alt="Selfie" className="w-full h-full object-contain" />
+                           <button onClick={(e) => { e.stopPropagation(); setTryOnSelfie(null); }}
+                              className="absolute top-2 right-2 bg-white rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:bg-gray-100">
+                              <span className="text-gray-500 text-sm">✕</span>
+                           </button>
+                        </div>
+                     ) : (
+                        <>
+                           <Upload className="w-12 h-12 text-coral-400 mb-4" />
+                           <p className="font-medium text-gray-700 mb-1">Your Photo</p>
+                           <p className="text-gray-400 text-sm text-center">Drag & drop, paste, or click</p>
+                        </>
+                     )}
+                  </div>
+
+                  {!tryOnSelfie && (
+                     <div className="bg-cream-100 rounded-xl p-4">
+                        <p className="text-gray-600 text-sm font-medium mb-2">📸 For best results:</p>
+                        <ul className="text-gray-500 text-sm space-y-1 ml-4">
+                           <li className="flex items-center gap-2"><CheckCircle className="w-3 h-3 text-sage-500" /> Face the camera directly</li>
+                           <li className="flex items-center gap-2"><CheckCircle className="w-3 h-3 text-sage-500" /> Good, even lighting</li>
+                           <li className="flex items-center gap-2"><CheckCircle className="w-3 h-3 text-sage-500" /> Neutral expression</li>
+                        </ul>
+                     </div>
+                  )}
+               </div>
             </div>
-         )}
+
+            {/* Button */}
+            <div className="flex justify-center mb-12">
+               <Button
+                  size="lg"
+                  disabled={!tryOnLipstick || !tryOnSelfie}
+                  isLoading={loading.isGenerating}
+                  onClick={handleTryOn}
+                  icon={<Sparkles size={20} />}
+                  className="px-12 py-4 text-lg rounded-full bg-gradient-to-r from-coral-400 to-coral-500 hover:from-coral-500 hover:to-coral-600 text-white shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                  {loading.isGenerating ? "Applying Makeup..." : "Try It On"}
+               </Button>
+            </div>
+
+            {/* Result */}
+            {tryOnResult && (
+               <div className="animate-slide-up">
+                  <div className="flex items-center gap-4 mb-8">
+                     <div className="h-px bg-coral-300/50 flex-1"></div>
+                     <h3 className="font-serif text-2xl font-semibold text-gray-800 italic">Your New Look</h3>
+                     <div className="h-px bg-coral-300/50 flex-1"></div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white rounded-3xl p-6 md:p-8 card-shadow">
+                     <div className="space-y-3">
+                        <p className="text-center text-sm font-medium text-gray-400 uppercase tracking-widest">Original</p>
+                        <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-gray-200">
+                           <img src={tryOnSelfie!} className="w-full h-full object-cover" alt="Original" />
+                        </div>
+                     </div>
+
+                     <div className="space-y-3">
+                        <p className="text-center text-sm font-semibold text-coral-500 uppercase tracking-widest">Result</p>
+                        <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-coral-400 shadow-lg group">
+                           <img src={tryOnResult} className="w-full h-full object-cover" alt="Result" />
+                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-6">
+                              <a href={tryOnResult} download="makeup-try-on.png" className="w-full">
+                                 <Button size="md" className="w-full bg-white text-gray-800 hover:bg-gray-100" icon={<Download size={18} />}>
+                                    Save Image
+                                 </Button>
+                              </a>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+
+                  {profile && profile.free_tries_used > 0 && profile.paid_tries_remaining === 0 && (
+                     <div className="mt-8 text-center bg-gradient-to-r from-coral-50 to-cream-100 rounded-2xl p-6 border border-coral-200">
+                        <p className="text-gray-700 font-medium mb-4">Want more looks? Get 20 tries for $4.99! ✨</p>
+                        <Button size="md" onClick={() => setShowPaywall(true)} icon={<Sparkles size={18} />}
+                           className="bg-coral-500 text-white hover:bg-coral-600">
+                           Unlock More Tries
+                        </Button>
+                     </div>
+                  )}
+               </div>
+            )}
+
+            <div className="text-center mt-12 text-gray-400 text-sm">
+               Powered by <span className="text-coral-500">Gemini AI</span>
+            </div>
+         </div>
       </div>
-    </div>
-  );
+   );
 }
