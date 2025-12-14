@@ -72,22 +72,7 @@ export default function App() {
    const handleTryOn = async () => {
       if (!tryOnLipstick || !tryOnSelfie) return;
 
-      // Wait for auth to finish loading
-      if (authLoading) {
-         return;
-      }
-
-      // Must be logged in
-      if (!user) {
-         setShowLoginModal(true);
-         return;
-      }
-
-      // Must have tries
-      if (!canTry()) {
-         setShowPaywall(true);
-         return;
-      }
+      // No auth required - open access for everyone
 
       // Generate
       setLoading({ isGenerating: true, message: 'Applying makeup...' });
@@ -95,25 +80,7 @@ export default function App() {
          const result = await generateTryOn(tryOnLipstick, tryOnSelfie);
          setTryOnResult(result);
 
-         // Update tries in DB
-         if (profile) {
-            try {
-               if (profile.free_tries_used < 3) {
-                  // Increment free tries used
-                  await supabase.from('profiles').update({
-                     free_tries_used: profile.free_tries_used + 1
-                  }).eq('id', user.id);
-               } else if (profile.paid_tries_remaining > 0) {
-                  // Decrement paid tries
-                  await supabase.from('profiles').update({
-                     paid_tries_remaining: profile.paid_tries_remaining - 1
-                  }).eq('id', user.id);
-               }
-               await refreshProfile();
-            } catch (dbError) {
-               console.error('Failed to update tries:', dbError);
-            }
-         }
+         // Skip database updates - no auth tracking
       } catch (e: any) {
          const errorMessage = e.message || String(e);
          let userMessage = 'Unable to apply makeup. Please try again.';
@@ -155,28 +122,7 @@ export default function App() {
             {/* Header */}
             <div className="text-center mb-12">
                <div className="flex items-center justify-end mb-8 min-h-[32px]">
-                  {user ? (
-                     <div className="flex items-center gap-3">
-                        <span className="text-sm text-gray-500">
-                           {profile?.paid_tries_remaining && profile.paid_tries_remaining > 0
-                              ? `${profile.paid_tries_remaining} tries left`
-                              : profile
-                                 ? `${Math.max(0, 3 - profile.free_tries_used)} free ${3 - profile.free_tries_used === 1 ? 'try' : 'tries'} left`
-                                 : '3 free tries'
-                           }
-                        </span>
-                        <button onClick={signOut} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
-                           <LogOut className="w-4 h-4" /> Sign out
-                        </button>
-                     </div>
-                  ) : (
-                     <button
-                        onClick={() => setShowLoginModal(true)}
-                        className="text-sm text-coral-500 hover:text-coral-600 font-medium"
-                     >
-                        Sign in
-                     </button>
-                  )}
+                  {/* Auth removed - open access */}
                </div>
 
                <h1 className="font-serif text-5xl md:text-6xl font-semibold text-gray-800 mb-2 italic">
