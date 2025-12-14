@@ -58,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log('Step 1: Extracting lipstick color...');
 
         const colorResponse = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-1.5-flash',
             contents: {
                 parts: [
                     {
@@ -129,7 +129,7 @@ CRITICAL INSTRUCTIONS:
 Output: The same photo with only the lip color changed to ${colorInfo.hex}.`;
 
         const editResponse = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-1.5-flash',
             contents: {
                 parts: [
                     {
@@ -164,6 +164,7 @@ Output: The same photo with only the lip color changed to ${colorInfo.hex}.`;
         return res.status(500).json({ error: 'No image data found in response' });
     } catch (error: any) {
         console.error('Generate API error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
         const errorMessage = error?.message || String(error);
 
         if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('API key not valid')) {
