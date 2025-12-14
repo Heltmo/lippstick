@@ -25,7 +25,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Fetch or create user profile
     const fetchProfile = async (userId: string, email: string) => {
-        console.log('Fetching profile for user:', userId);
         try {
             // Try to get existing profile
             const { data, error } = await supabase
@@ -34,11 +33,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 .eq('id', userId)
                 .single();
 
-            console.log('Profile fetch result:', { data, error });
-
             if (error && error.code === 'PGRST116') {
                 // Profile doesn't exist, create it
-                console.log('Creating new profile...');
                 const { data: newProfile, error: insertError } = await supabase
                     .from('profiles')
                     .insert({
@@ -49,8 +45,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     })
                     .select()
                     .single();
-
-                console.log('Profile creation result:', { newProfile, insertError });
 
                 if (insertError) {
                     console.error('Profile creation error:', insertError);
@@ -103,7 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         // Get initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
-            console.log('Initial session:', session?.user?.email);
             setSession(session);
             setUser(session?.user ?? null);
             if (session?.user) {
@@ -115,7 +108,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                console.log('Auth state change:', event, session?.user?.email);
                 setSession(session);
                 setUser(session?.user ?? null);
                 if (session?.user) {

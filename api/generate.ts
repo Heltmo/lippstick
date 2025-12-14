@@ -4,6 +4,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI, Modality } from '@google/genai';
+import { rateLimit } from '../lib/rateLimit';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'OPTIONS') {
@@ -14,11 +15,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    // Rate limiting: 5 requests per hour per IP
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
+                     (req.headers['x-real-ip'] as string) ||
+                     'unknown';
+
+    const allowed = rateLimit(clientIp, {
+        interval: 60 * 60 * 1000, // 1 hour
+        maxRequests: 5,
+    });
+
+    if (!allowed) {
+        return res.status(429).json({
+            error: 'Too many requests. Please try again later.'
+        });
+    }
+
     try {
         const { lipstickImage, selfieImage } = req.body;
 
         if (!lipstickImage || !selfieImage) {
             return res.status(400).json({ error: 'Missing required images' });
+        }
+
+        // Validate image sizes (base64 strings - roughly 5MB limit = ~7MB base64)
+        const MAX_BASE64_SIZE = 7 * 1024 * 1024; // ~5MB original file size
+        if (lipstickImage.length > MAX_BASE64_SIZE || selfieImage.length > MAX_BASE64_SIZE) {
+            return res.status(400).json({ error: 'Image files are too large. Please use images smaller than 5MB.' });
         }
 
         const apiKey = process.env.GEMINI_API_KEY;

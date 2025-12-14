@@ -4,6 +4,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { buffer } from 'micro';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
     apiVersion: '2023-10-16',
@@ -13,6 +14,13 @@ const supabase = createClient(
     process.env.SUPABASE_URL || '',
     process.env.SUPABASE_SERVICE_KEY || ''
 );
+
+// Disable body parsing for webhook - we need raw body
+export const config = {
+    api: {
+        bodyParser: false,
+    },
+};
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') {
@@ -25,9 +33,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let event: Stripe.Event;
 
     try {
-        // Get raw body
-        const rawBody = JSON.stringify(req.body);
-        event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+        // Get raw body buffer for signature verification
+        const buf = await buffer(req);
+        event = stripe.webhooks.constructEvent(buf, sig, webhookSecret);
     } catch (err: any) {
         console.error('Webhook signature verification failed:', err.message);
         return res.status(400).json({ error: `Webhook Error: ${err.message}` });

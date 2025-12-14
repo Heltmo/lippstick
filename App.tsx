@@ -26,9 +26,6 @@ export default function App() {
 
    const { user, profile, signOut, refreshProfile, loading: authLoading } = useAuth();
 
-   // Debug: log auth state
-   console.log('Auth state:', { user: user?.email, profile, authLoading });
-
    const canTry = () => {
       if (!user) return false;
       if (!profile) return true; // Allow if profile not loaded yet
@@ -38,6 +35,14 @@ export default function App() {
    };
 
    const handleFile = (file: File, setter: (val: string | null) => void) => {
+      // File size validation: max 5MB
+      const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+
+      if (file.size > MAX_FILE_SIZE) {
+         alert('Image is too large. Please upload an image smaller than 5MB.');
+         return;
+      }
+
       const reader = new FileReader();
       reader.onload = (e) => {
          if (e.target?.result) setter(e.target.result as string);
@@ -69,15 +74,11 @@ export default function App() {
 
       // Wait for auth to finish loading
       if (authLoading) {
-         console.log('Auth still loading, waiting...');
          return;
       }
 
-      console.log('handleTryOn - user:', user?.email);
-
       // Must be logged in
       if (!user) {
-         console.log('No user, showing login modal');
          setShowLoginModal(true);
          return;
       }
@@ -110,7 +111,20 @@ export default function App() {
             }
          }
       } catch (e: any) {
-         alert(`Operation failed: ${e.message || e}`);
+         const errorMessage = e.message || String(e);
+         let userMessage = 'Unable to apply makeup. Please try again.';
+
+         if (errorMessage.includes('Too many requests')) {
+            userMessage = 'You\'ve made too many requests. Please wait a bit before trying again.';
+         } else if (errorMessage.includes('too large')) {
+            userMessage = 'Your images are too large. Please use smaller images (under 5MB).';
+         } else if (errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
+            userMessage = 'Service is temporarily busy. Please try again in a few minutes.';
+         } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+            userMessage = 'Network error. Please check your connection and try again.';
+         }
+
+         alert(userMessage);
       } finally {
          setLoading({ isGenerating: false, message: '' });
       }
