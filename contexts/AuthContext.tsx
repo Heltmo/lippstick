@@ -95,13 +95,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     useEffect(() => {
+        // Timeout fallback in case auth hangs
+        const timeout = setTimeout(() => {
+            console.warn('Auth loading timeout - forcing load');
+            setLoading(false);
+        }, 5000); // 5 second timeout
+
         // Get initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             setUser(session?.user ?? null);
             if (session?.user) {
-                fetchProfile(session.user.id, session.user.email || '');
+                fetchProfile(session.user.id, session.user.email || '').finally(() => {
+                    clearTimeout(timeout);
+                    setLoading(false);
+                });
+            } else {
+                clearTimeout(timeout);
+                setLoading(false);
             }
+        }).catch((error) => {
+            console.error('Auth init error:', error);
+            clearTimeout(timeout);
             setLoading(false);
         });
 
@@ -119,7 +134,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         );
 
-        return () => subscription.unsubscribe();
+        return () => {
+            clearTimeout(timeout);
+            subscription.unsubscribe();
+        };
     }, []);
 
     const signInWithGoogle = async () => {
