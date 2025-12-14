@@ -49,7 +49,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose }) => {
                     Makeup Atelier
                 </h2>
                 <p className="text-gray-500 text-sm mb-8">
-                    Sign in to try on your first look — free!
+                    Sign in to get 3 free virtual try-ons!
                 </p>
 
                 {/* Google Button */}

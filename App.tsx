@@ -29,7 +29,7 @@ export default function App() {
    const canTry = () => {
       if (!user) return false;
       if (!profile) return true; // Allow if profile not loaded yet
-      if (profile.free_tries_used === 0) return true;
+      if (profile.free_tries_used < 3) return true; // 3 free tries
       if (profile.paid_tries_remaining > 0) return true;
       return false;
    };
@@ -98,9 +98,13 @@ export default function App() {
          // Update tries in DB
          if (profile) {
             try {
-               if (profile.free_tries_used === 0) {
-                  await supabase.from('profiles').update({ free_tries_used: 1 }).eq('id', user.id);
+               if (profile.free_tries_used < 3) {
+                  // Increment free tries used
+                  await supabase.from('profiles').update({
+                     free_tries_used: profile.free_tries_used + 1
+                  }).eq('id', user.id);
                } else if (profile.paid_tries_remaining > 0) {
+                  // Decrement paid tries
                   await supabase.from('profiles').update({
                      paid_tries_remaining: profile.paid_tries_remaining - 1
                   }).eq('id', user.id);
@@ -156,9 +160,9 @@ export default function App() {
                         <span className="text-sm text-gray-500">
                            {profile?.paid_tries_remaining && profile.paid_tries_remaining > 0
                               ? `${profile.paid_tries_remaining} tries left`
-                              : profile?.free_tries_used === 0 || !profile
-                                 ? '1 free try'
-                                 : '0 tries left'
+                              : profile
+                                 ? `${Math.max(0, 3 - profile.free_tries_used)} free ${3 - profile.free_tries_used === 1 ? 'try' : 'tries'} left`
+                                 : '3 free tries'
                            }
                         </span>
                         <button onClick={signOut} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
@@ -315,9 +319,9 @@ export default function App() {
                      </div>
                   </div>
 
-                  {profile && profile.free_tries_used > 0 && profile.paid_tries_remaining === 0 && (
+                  {profile && profile.free_tries_used >= 3 && profile.paid_tries_remaining === 0 && (
                      <div className="mt-8 text-center bg-gradient-to-r from-coral-50 to-cream-100 rounded-2xl p-6 border border-coral-200">
-                        <p className="text-gray-700 font-medium mb-4">Want more looks? Get 20 tries for $4.99! ✨</p>
+                        <p className="text-gray-700 font-medium mb-4">Love your looks? Get 20 more tries for $4.99! ✨</p>
                         <Button size="md" onClick={() => setShowPaywall(true)} icon={<Sparkles size={18} />}
                            className="bg-coral-500 text-white hover:bg-coral-600">
                            Unlock More Tries
