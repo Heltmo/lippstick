@@ -115,8 +115,7 @@ export default function App() {
 
    return (
       <div className="min-h-screen font-sans py-8 px-4 md:py-16">
-         {showLoginModal && !user && <LoginModal onClose={() => setShowLoginModal(false)} />}
-         {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
+         {/* Modals removed - no auth required */}
 
          <div className="max-w-5xl mx-auto animate-fade-in">
             {/* Header */}
