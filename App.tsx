@@ -3,14 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useState, useRef, useCallback } from 'react';
-import { Sparkles, Download, Upload, CheckCircle, LogOut } from 'lucide-react';
+import { Download, Upload, CheckCircle, Sparkles } from 'lucide-react';
 import { Button } from './components/Button';
 import { generateTryOn } from './services/geminiService';
 import { LoadingState } from './types';
-import { useAuth } from './contexts/AuthContext';
-import { supabase } from './lib/supabase';
-import LoginModal from './components/LoginModal';
-import PaywallModal from './components/PaywallModal';
 
 export default function App() {
    const [tryOnLipstick, setTryOnLipstick] = useState<string | null>(null);
@@ -18,21 +14,11 @@ export default function App() {
    const [tryOnResult, setTryOnResult] = useState<string | null>(null);
    const [loading, setLoading] = useState<LoadingState>({ isGenerating: false, message: '' });
 
-   const [showLoginModal, setShowLoginModal] = useState(false);
-   const [showPaywall, setShowPaywall] = useState(false);
-
    const lipstickInputRef = useRef<HTMLInputElement>(null);
    const selfieInputRef = useRef<HTMLInputElement>(null);
 
-   const { user, profile, signOut, refreshProfile, loading: authLoading } = useAuth();
-
-   const canTry = () => {
-      if (!user) return false;
-      if (!profile) return true; // Allow if profile not loaded yet
-      if (profile.free_tries_used < 3) return true; // 3 free tries
-      if (profile.paid_tries_remaining > 0) return true;
-      return false;
-   };
+   // No auth - always allow
+   const canTry = () => true;
 
    const handleFile = (file: File, setter: (val: string | null) => void) => {
       // File size validation: max 5MB
@@ -100,18 +86,6 @@ export default function App() {
          setLoading({ isGenerating: false, message: '' });
       }
    };
-
-   // Show loading while auth initializes
-   if (authLoading) {
-      return (
-         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cream-100 to-cream-200">
-            <div className="text-center">
-               <div className="w-12 h-12 border-4 border-coral-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-               <p className="text-gray-500">Loading...</p>
-            </div>
-         </div>
-      );
-   }
 
    return (
       <div className="min-h-screen font-sans py-8 px-4 md:py-16">
@@ -264,15 +238,6 @@ export default function App() {
                      </div>
                   </div>
 
-                  {profile && profile.free_tries_used >= 3 && profile.paid_tries_remaining === 0 && (
-                     <div className="mt-8 text-center bg-gradient-to-r from-coral-50 to-cream-100 rounded-2xl p-6 border border-coral-200">
-                        <p className="text-gray-700 font-medium mb-4">Love your looks? Get 20 more tries for $4.99! ✨</p>
-                        <Button size="md" onClick={() => setShowPaywall(true)} icon={<Sparkles size={18} />}
-                           className="bg-coral-500 text-white hover:bg-coral-600">
-                           Unlock More Tries
-                        </Button>
-                     </div>
-                  )}
                </div>
             )}
 
