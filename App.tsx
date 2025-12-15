@@ -242,7 +242,7 @@ export default function App() {
             )}
 
             <div className="text-center mt-12 text-gray-400 text-sm">
-               Powered by <span className="text-coral-500">Gemini AI</span>
+               Powered by <span className="text-coral-500">Google AI</span>
             </div>
          </div>
       </div>
