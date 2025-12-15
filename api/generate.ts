@@ -1,10 +1,21 @@
 /**
  * Vercel Serverless Function for Virtual Makeup Try-On
- * Uses Replicate's nano-banana-pro model with polling for long-running tasks
+ * Uses Replicate's nano-banana model with server-side usage enforcement
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Replicate from 'replicate';
+import { createClient } from '@supabase/supabase-js';
 import { rateLimit } from '../lib/rateLimit.js';
+
+const DAILY_LIMIT = Number(process.env.DAILY_TRYON_LIMIT || '50');
+
+function getClientIp(req: VercelRequest): string {
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    if (typeof xForwardedFor === 'string') {
+        return xForwardedFor.split(',')[0].trim();
+    }
+    return (req.headers['x-real-ip'] as string) || req.socket?.remoteAddress || 'unknown';
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'OPTIONS') {
@@ -15,21 +26,76 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Rate limiting: 5 requests per hour per IP
-    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
-                     (req.headers['x-real-ip'] as string) ||
-                     'unknown';
-
-    const allowed = rateLimit(clientIp, {
+    // 1) IP-based rate limiting (bot protection, always enabled)
+    const clientIp = getClientIp(req);
+    const ipAllowed = rateLimit(`tryon:${clientIp}`, {
         interval: 60 * 60 * 1000, // 1 hour
-        maxRequests: 5,
+        maxRequests: 10, // 10 per hour per IP (increased from 5 for logged-in users)
     });
 
-    if (!allowed) {
+    if (!ipAllowed) {
         return res.status(429).json({
-            error: 'Too many requests. Please try again later.'
+            error: 'Too many requests from this IP. Please try again later.'
         });
     }
+
+    // 2) User-based daily quota enforcement (logged-in users only)
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (token) {
+        // User is logged in - check daily quota via Supabase
+        const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+        if (!supabaseUrl || !supabaseAnonKey) {
+            console.error('Supabase credentials not configured for usage tracking');
+            // Continue without user tracking if Supabase not configured
+        } else {
+            try {
+                const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+                    global: {
+                        headers: { Authorization: `Bearer ${token}` }
+                    },
+                });
+
+                // Verify user and check quota
+                const { data: userData, error: userError } = await supabase.auth.getUser();
+
+                if (userError) {
+                    console.error('Auth error:', userError);
+                    return res.status(401).json({ error: 'Invalid authentication token' });
+                }
+
+                const user = userData?.user;
+                if (!user) {
+                    return res.status(401).json({ error: 'User not authenticated' });
+                }
+
+                // Check and increment daily usage
+                const { data: usageData, error: usageError } = await supabase
+                    .rpc('check_and_increment_tryons', { daily_limit: DAILY_LIMIT });
+
+                if (usageError) {
+                    console.error('Usage check error:', usageError);
+                    return res.status(500).json({ error: 'Failed to check usage quota' });
+                }
+
+                if (!usageData?.allowed) {
+                    return res.status(429).json({
+                        error: `Daily limit of ${DAILY_LIMIT} try-ons reached. Resets tomorrow.`,
+                        usage: usageData,
+                    });
+                }
+
+                console.log(`User ${user.id} usage:`, usageData);
+            } catch (error) {
+                console.error('Supabase quota check failed:', error);
+                // Continue with generation if quota check fails (fail open for better UX)
+            }
+        }
+    }
+    // For anonymous users, IP rate limit is the only enforcement
 
     try {
         const { lipstickImage, selfieImage } = req.body;
