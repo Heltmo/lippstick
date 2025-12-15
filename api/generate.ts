@@ -56,27 +56,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log('Running virtual try-on with nano-banana-pro...');
 
         // Use nano-banana-pro for image editing
-        // This model can edit images based on text prompts
+        // This model takes image URIs as input, so we pass the data URIs directly
         const output = await replicate.run(
             "google/nano-banana-pro",
             {
                 input: {
-                    image: selfieImage,
-                    prompt: "Apply the exact lipstick color from the reference image to the lips. Keep everything else identical - same person, same face, same hair, same background, same lighting. Only change the lip color to match the lipstick shade. Professional makeup application, photorealistic.",
-                    negative_prompt: "different person, different face, blur, distortion, low quality, artifacts",
-                    num_inference_steps: 28,
-                    guidance_scale: 3.5,
-                    output_format: "png",
-                    output_quality: 90,
-                    aspect_ratio: "1:1"
+                    prompt: "Apply the exact lipstick color from the reference image to the person's lips. Keep everything else identical - same person, same face, same hair, same background, same lighting. Only change the lip color to match the lipstick shade. Professional makeup application, photorealistic, natural looking.",
+                    image_input: [selfieImage, lipstickImage],
+                    aspect_ratio: "match_input_image",
+                    resolution: "2K",
+                    output_format: "png"
                 }
             }
         );
 
         console.log('Try-on completed successfully');
 
-        // Output is an array of URLs or a single URL
-        const resultUrl = Array.isArray(output) ? output[0] : output;
+        // Output is a URL string
+        const resultUrl = output as unknown as string;
 
         return res.status(200).json({
             success: true,
@@ -88,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error('Error details:', JSON.stringify(error, null, 2));
         const errorMessage = error?.message || String(error);
 
-        if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('API token')) {
+        if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('API token') || errorMessage.includes('Unauthorized')) {
             return res.status(401).json({ error: 'Invalid API key configured on server' });
         }
         if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('403')) {
