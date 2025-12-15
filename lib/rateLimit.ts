@@ -12,15 +12,8 @@ interface RateLimitStore {
 
 const store: RateLimitStore = {};
 
-// Clean up old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  Object.keys(store).forEach((key) => {
-    if (store[key].resetTime < now) {
-      delete store[key];
-    }
-  });
-}, 5 * 60 * 1000);
+// Note: In serverless environments, the store is ephemeral and will be
+// garbage collected when the function instance shuts down, so no cleanup needed
 
 export interface RateLimitConfig {
   interval: number; // in milliseconds
