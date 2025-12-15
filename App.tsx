@@ -13,7 +13,7 @@ import LoginModal from './components/LoginModal';
 const FREE_TRIES_LIMIT = 2;
 
 export default function App() {
-   const { user, loading: authLoading } = useAuth();
+   const { user, loading: authLoading, signOut } = useAuth();
    const [tryOnLipstick, setTryOnLipstick] = useState<string | null>(null);
    const [tryOnSelfie, setTryOnSelfie] = useState<string | null>(null);
    const [tryOnResult, setTryOnResult] = useState<string | null>(null);
@@ -34,6 +34,8 @@ export default function App() {
          // Logged in users get unlimited
          setFreeTriesUsed(0);
          setShowResultLock(false);
+         // Clear localStorage when user logs in
+         localStorage.removeItem('freeTriesUsed');
       }
    }, [user]);
 
@@ -136,6 +138,23 @@ export default function App() {
                <p className="text-gray-500 tracking-[0.3em] text-sm uppercase">
                   Virtual Try-On
                </p>
+               {user && (
+                  <div className="mt-4 flex items-center justify-center gap-2">
+                     <div className="bg-sage-100 text-sage-700 px-4 py-2 rounded-full text-sm font-medium">
+                        ✓ Signed in • Unlimited tries
+                     </div>
+                     <button
+                        onClick={() => {
+                           if (confirm('Are you sure you want to sign out?')) {
+                              signOut();
+                           }
+                        }}
+                        className="text-sm text-gray-400 hover:text-gray-600 underline"
+                     >
+                        Sign out
+                     </button>
+                  </div>
+               )}
             </div>
 
             {/* Upload Cards */}
