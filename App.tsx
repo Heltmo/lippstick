@@ -144,7 +144,7 @@ export default function App() {
                <div className="bg-white rounded-2xl p-6 card-shadow">
                   <div className="flex items-center gap-3 mb-6">
                      <span className="flex items-center justify-center w-8 h-8 rounded-full bg-coral-400 text-white text-sm font-semibold">1</span>
-                     <h2 className="text-xl font-semibold text-gray-800">Upload Product</h2>
+                     <h2 className="text-xl font-semibold text-gray-800">Choose a Product</h2>
                   </div>
 
                   <input ref={lipstickInputRef} type="file" accept="image/*" className="hidden"
@@ -180,7 +180,7 @@ export default function App() {
                <div className="bg-white rounded-2xl p-6 card-shadow">
                   <div className="flex items-center gap-3 mb-6">
                      <span className="flex items-center justify-center w-8 h-8 rounded-full bg-coral-400 text-white text-sm font-semibold">2</span>
-                     <h2 className="text-xl font-semibold text-gray-800">Your Selfie</h2>
+                     <h2 className="text-xl font-semibold text-gray-800">Your Photo</h2>
                   </div>
 
                   <input ref={selfieInputRef} type="file" accept="image/*" className="hidden"
@@ -226,6 +226,7 @@ export default function App() {
 
             {/* Button */}
             <div className="flex flex-col items-center mb-12">
+               <p className="text-gray-500 text-sm mb-3">Realistic results in seconds</p>
                <Button
                   size="lg"
                   disabled={!tryOnLipstick || !tryOnSelfie}
@@ -244,11 +245,12 @@ export default function App() {
             {/* Result */}
             {tryOnResult && (
                <div className="animate-slide-up">
-                  <div className="flex items-center gap-4 mb-8">
+                  <div className="flex items-center gap-4 mb-2">
                      <div className="h-px bg-coral-300/50 flex-1"></div>
                      <h3 className="font-serif text-2xl font-semibold text-gray-800 italic">This Is How It Looks On You</h3>
                      <div className="h-px bg-coral-300/50 flex-1"></div>
                   </div>
+                  <p className="text-center text-gray-400 text-sm mb-6">Compare shades. Save looks. Decide confidently.</p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white rounded-3xl p-6 md:p-8 card-shadow relative">
                      <div className="space-y-3">
