@@ -282,9 +282,9 @@ export default function App() {
                      <div className="space-y-3 relative">
                         <p className="text-center text-sm font-semibold text-coral-500 uppercase tracking-widest">Result</p>
                         <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-coral-400 shadow-lg group">
-                           <img src={tryOnResult} className={`w-full h-full object-cover ${showResultLock ? 'blur-sm' : ''}`} alt="Result" />
+                           <img src={tryOnResult} className={`w-full h-full object-cover ${showResultLock && !user ? 'blur-sm' : ''}`} alt="Result" />
 
-                           {!showResultLock && (
+                           {(!showResultLock || user) && (
                               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-6">
                                  <a href={tryOnResult} download="makeup-try-on.png" className="w-full">
                                     <Button size="md" className="w-full bg-white text-gray-800 hover:bg-gray-100" icon={<Download size={18} />}>
@@ -294,8 +294,8 @@ export default function App() {
                               </div>
                            )}
 
-                           {/* Lock Overlay */}
-                           {showResultLock && (
+                           {/* Lock Overlay - only show if not logged in */}
+                           {showResultLock && !user && (
                               <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center">
                                  <div className="bg-coral-100 rounded-full p-4 mb-4">
                                     <Lock className="w-8 h-8 text-coral-500" />
