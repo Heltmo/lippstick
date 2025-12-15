@@ -15,8 +15,19 @@ export const generateTryOn = async (
 ): Promise<string> => {
   try {
     // Get current session token to send to API for quota enforcement
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
+    // Use timeout to prevent hanging if Supabase is slow
+    let token: string | undefined;
+    try {
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Session timeout')), 2000)
+      );
+      const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+      token = sessionData?.session?.access_token;
+    } catch (error) {
+      console.warn('Failed to get session, continuing without auth token:', error);
+      // Continue without token - API will work for anonymous users
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
