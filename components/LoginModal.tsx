@@ -46,10 +46,10 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose }) => {
 
                 {/* Title */}
                 <h2 className="font-serif text-3xl font-semibold text-gray-800 mb-2 italic">
-                    Makeup Atelier
+                    Don't Lose Your Looks
                 </h2>
                 <p className="text-gray-500 text-sm mb-8">
-                    Sign in to get 3 free virtual try-ons!
+                    Create a free account to keep your results and try more products.
                 </p>
 
                 {/* Google Button */}

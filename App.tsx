@@ -2,23 +2,40 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { useState, useRef, useCallback } from 'react';
-import { Download, Upload, CheckCircle, Sparkles } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Download, Upload, CheckCircle, Sparkles, Lock } from 'lucide-react';
 import { Button } from './components/Button';
 import { generateTryOn } from './services/geminiService';
 import { LoadingState } from './types';
+import { useAuth } from './contexts/AuthContext';
+import LoginModal from './components/LoginModal';
+
+const FREE_TRIES_LIMIT = 2;
 
 export default function App() {
+   const { user, loading: authLoading } = useAuth();
    const [tryOnLipstick, setTryOnLipstick] = useState<string | null>(null);
    const [tryOnSelfie, setTryOnSelfie] = useState<string | null>(null);
    const [tryOnResult, setTryOnResult] = useState<string | null>(null);
    const [loading, setLoading] = useState<LoadingState>({ isGenerating: false, message: '' });
+   const [showLogin, setShowLogin] = useState(false);
+   const [showResultLock, setShowResultLock] = useState(false);
+   const [freeTriesUsed, setFreeTriesUsed] = useState(0);
 
    const lipstickInputRef = useRef<HTMLInputElement>(null);
    const selfieInputRef = useRef<HTMLInputElement>(null);
 
-   // No auth - always allow
-   const canTry = () => true;
+   // Load free tries from localStorage on mount
+   useEffect(() => {
+      if (!user) {
+         const stored = localStorage.getItem('freeTriesUsed');
+         setFreeTriesUsed(stored ? parseInt(stored, 10) : 0);
+      } else {
+         // Logged in users get unlimited
+         setFreeTriesUsed(0);
+         setShowResultLock(false);
+      }
+   }, [user]);
 
    const handleFile = (file: File, setter: (val: string | null) => void) => {
       // File size validation: max 5MB
@@ -58,15 +75,23 @@ export default function App() {
    const handleTryOn = async () => {
       if (!tryOnLipstick || !tryOnSelfie) return;
 
-      // No auth required - open access for everyone
-
-      // Generate
+      // Allow the try-on to happen
       setLoading({ isGenerating: true, message: 'Applying makeup...' });
       try {
          const result = await generateTryOn(tryOnLipstick, tryOnSelfie);
          setTryOnResult(result);
 
-         // Skip database updates - no auth tracking
+         // After showing result, check if we should lock it
+         if (!user) {
+            const newCount = freeTriesUsed + 1;
+            setFreeTriesUsed(newCount);
+            localStorage.setItem('freeTriesUsed', newCount.toString());
+
+            if (newCount >= FREE_TRIES_LIMIT) {
+               // Show lock overlay after 2nd try
+               setShowResultLock(true);
+            }
+         }
       } catch (e: any) {
          const errorMessage = e.message || String(e);
          let userMessage = 'Unable to apply makeup. Please try again.';
@@ -87,17 +112,24 @@ export default function App() {
       }
    };
 
+   if (authLoading) {
+      return (
+         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cream-100 to-cream-200">
+            <div className="text-center">
+               <div className="w-12 h-12 border-4 border-coral-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+               <p className="text-gray-500">Loading...</p>
+            </div>
+         </div>
+      );
+   }
+
    return (
       <div className="min-h-screen font-sans py-8 px-4 md:py-16">
-         {/* Modals removed - no auth required */}
+         {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
 
          <div className="max-w-5xl mx-auto animate-fade-in">
             {/* Header */}
             <div className="text-center mb-12">
-               <div className="flex items-center justify-end mb-8 min-h-[32px]">
-                  {/* Auth removed - open access */}
-               </div>
-
                <h1 className="font-serif text-5xl md:text-6xl font-semibold text-gray-800 mb-2 italic">
                   Makeup Atelier
                </h1>
@@ -193,7 +225,7 @@ export default function App() {
             </div>
 
             {/* Button */}
-            <div className="flex justify-center mb-12">
+            <div className="flex flex-col items-center mb-12">
                <Button
                   size="lg"
                   disabled={!tryOnLipstick || !tryOnSelfie}
@@ -202,8 +234,11 @@ export default function App() {
                   icon={<Sparkles size={20} />}
                   className="px-12 py-4 text-lg rounded-full bg-gradient-to-r from-coral-400 to-coral-500 hover:from-coral-500 hover:to-coral-600 text-white shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                >
-                  {loading.isGenerating ? "Applying Makeup..." : "Try It On"}
+                  {loading.isGenerating ? "Applying Makeup..." : "See It On You"}
                </Button>
+               {!user && freeTriesUsed < FREE_TRIES_LIMIT && (
+                  <p className="text-gray-400 text-sm mt-3">No signup required for your first look</p>
+               )}
             </div>
 
             {/* Result */}
@@ -211,11 +246,11 @@ export default function App() {
                <div className="animate-slide-up">
                   <div className="flex items-center gap-4 mb-8">
                      <div className="h-px bg-coral-300/50 flex-1"></div>
-                     <h3 className="font-serif text-2xl font-semibold text-gray-800 italic">Your New Look</h3>
+                     <h3 className="font-serif text-2xl font-semibold text-gray-800 italic">This Is How It Looks On You</h3>
                      <div className="h-px bg-coral-300/50 flex-1"></div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white rounded-3xl p-6 md:p-8 card-shadow">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white rounded-3xl p-6 md:p-8 card-shadow relative">
                      <div className="space-y-3">
                         <p className="text-center text-sm font-medium text-gray-400 uppercase tracking-widest">Original</p>
                         <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-gray-200">
@@ -223,21 +258,48 @@ export default function App() {
                         </div>
                      </div>
 
-                     <div className="space-y-3">
+                     <div className="space-y-3 relative">
                         <p className="text-center text-sm font-semibold text-coral-500 uppercase tracking-widest">Result</p>
                         <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-coral-400 shadow-lg group">
-                           <img src={tryOnResult} className="w-full h-full object-cover" alt="Result" />
-                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-6">
-                              <a href={tryOnResult} download="makeup-try-on.png" className="w-full">
-                                 <Button size="md" className="w-full bg-white text-gray-800 hover:bg-gray-100" icon={<Download size={18} />}>
-                                    Save Image
+                           <img src={tryOnResult} className={`w-full h-full object-cover ${showResultLock ? 'blur-sm' : ''}`} alt="Result" />
+
+                           {!showResultLock && (
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-6">
+                                 <a href={tryOnResult} download="makeup-try-on.png" className="w-full">
+                                    <Button size="md" className="w-full bg-white text-gray-800 hover:bg-gray-100" icon={<Download size={18} />}>
+                                       Save Image
+                                    </Button>
+                                 </a>
+                              </div>
+                           )}
+
+                           {/* Lock Overlay */}
+                           {showResultLock && (
+                              <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center">
+                                 <div className="bg-coral-100 rounded-full p-4 mb-4">
+                                    <Lock className="w-8 h-8 text-coral-500" />
+                                 </div>
+                                 <h4 className="text-xl font-semibold text-gray-800 mb-2">Save and Compare Your Looks</h4>
+                                 <p className="text-gray-600 mb-1">You've reached the preview limit.</p>
+                                 <p className="text-gray-600 mb-6">Create an account to save results, compare shades, and continue trying.</p>
+                                 <Button
+                                    size="lg"
+                                    onClick={() => setShowLogin(true)}
+                                    className="bg-coral-500 text-white hover:bg-coral-600 mb-3"
+                                 >
+                                    Continue & Save My Results
                                  </Button>
-                              </a>
-                           </div>
+                                 <button
+                                    onClick={() => setShowResultLock(false)}
+                                    className="text-sm text-gray-400 hover:text-gray-600 underline"
+                                 >
+                                    I don't want to save my looks
+                                 </button>
+                              </div>
+                           )}
                         </div>
                      </div>
                   </div>
-
                </div>
             )}
 
