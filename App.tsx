@@ -134,7 +134,7 @@ export default function App() {
                   Makeup Atelier
                </h1>
                <p className="text-gray-500 tracking-[0.3em] text-sm uppercase">
-                  AI Virtual Try-On
+                  Virtual Try-On
                </p>
             </div>
 
@@ -303,9 +303,6 @@ export default function App() {
                </div>
             )}
 
-            <div className="text-center mt-12 text-gray-400 text-sm">
-               Powered by <span className="text-coral-500">Google AI</span>
-            </div>
          </div>
       </div>
    );
