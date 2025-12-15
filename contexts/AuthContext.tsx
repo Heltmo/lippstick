@@ -95,30 +95,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     useEffect(() => {
-        // Timeout fallback in case auth hangs
-        const timeout = setTimeout(() => {
-            console.warn('Auth loading timeout - forcing load');
-            setLoading(false);
-        }, 1000); // 1 second timeout for fast page load
+        // Get initial session with timeout to prevent hanging
+        const initAuth = async () => {
+            try {
+                const sessionPromise = supabase.auth.getSession();
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Auth timeout')), 2000)
+                );
 
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            if (session?.user) {
-                fetchProfile(session.user.id, session.user.email || '').finally(() => {
-                    clearTimeout(timeout);
-                    setLoading(false);
-                });
-            } else {
-                clearTimeout(timeout);
+                const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+
+                setSession(session);
+                setUser(session?.user ?? null);
+                if (session?.user) {
+                    await fetchProfile(session.user.id, session.user.email || '');
+                }
+            } catch (error) {
+                console.warn('Auth init failed or timed out, continuing as anonymous:', error);
+                setSession(null);
+                setUser(null);
+            } finally {
                 setLoading(false);
             }
-        }).catch((error) => {
-            console.error('Auth init error:', error);
-            clearTimeout(timeout);
-            setLoading(false);
-        });
+        };
+
+        initAuth();
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -135,7 +136,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
 
         return () => {
-            clearTimeout(timeout);
             subscription.unsubscribe();
         };
     }, []);
