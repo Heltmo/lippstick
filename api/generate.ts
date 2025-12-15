@@ -4,7 +4,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Replicate from 'replicate';
-import { rateLimit } from '../lib/rateLimit';
+import { rateLimit } from '../lib/rateLimit.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'OPTIONS') {
