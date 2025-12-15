@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         console.log('Running virtual try-on with nano-banana-pro...');
 
-        // Use nano-banana-pro for image editing
+        // Use nano-banana-pro for image editing (supports up to 14 image inputs)
         // This model takes image URIs as input, so we pass the data URIs directly
         const output = await replicate.run(
             "google/nano-banana-pro",
@@ -65,7 +65,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     image_input: [selfieImage, lipstickImage],
                     aspect_ratio: "match_input_image",
                     resolution: "2K",
-                    output_format: "png"
+                    output_format: "png",
+                    safety_filter_level: "block_only_high"
                 }
             }
         );
