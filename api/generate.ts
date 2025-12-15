@@ -76,9 +76,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ]);
 
         console.log('Try-on completed successfully');
+        console.log('Output type:', typeof output);
+        console.log('Output:', output);
 
-        // Output is a URL string
-        const resultUrl = output as unknown as string;
+        // Replicate returns a File object with .url() method
+        let resultUrl: string;
+        if (output && typeof output === 'object' && 'url' in output) {
+            resultUrl = (output as any).url();
+        } else if (typeof output === 'string') {
+            resultUrl = output;
+        } else if (Array.isArray(output) && output.length > 0) {
+            resultUrl = output[0];
+        } else {
+            throw new Error('Unexpected output format from Replicate');
+        }
+
+        console.log('Result URL:', resultUrl);
 
         return res.status(200).json({
             success: true,
