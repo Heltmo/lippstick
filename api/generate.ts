@@ -1,13 +1,13 @@
 /**
  * Vercel Serverless Function for Virtual Makeup Try-On
- * Uses Replicate's nano-banana model with server-side usage enforcement
+ * Uses Replicate's nano-banana model
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Replicate from 'replicate';
-import { createClient } from '@supabase/supabase-js';
+// import { createClient } from '@supabase/supabase-js'; // Uncomment when enabling quotas
 import { rateLimit } from '../lib/rateLimit.js';
 
-const DAILY_LIMIT = Number(process.env.DAILY_TRYON_LIMIT || '50');
+// const DAILY_LIMIT = Number(process.env.DAILY_TRYON_LIMIT || '50'); // Uncomment when enabling quotas
 
 function getClientIp(req: VercelRequest): string {
     const xForwardedFor = req.headers['x-forwarded-for'];
@@ -39,63 +39,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
-    // 2) User-based daily quota enforcement (logged-in users only)
+    // 2) User-based daily quota enforcement (DISABLED - run SQL in Supabase first)
+    // TODO: Uncomment after running supabase-usage-schema.sql in Supabase
+    /*
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
     if (token) {
-        // User is logged in - check daily quota via Supabase
         const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
         const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
-        if (!supabaseUrl || !supabaseAnonKey) {
-            console.error('Supabase credentials not configured for usage tracking');
-            // Continue without user tracking if Supabase not configured
-        } else {
+        if (supabaseUrl && supabaseAnonKey) {
             try {
                 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-                    global: {
-                        headers: { Authorization: `Bearer ${token}` }
-                    },
+                    global: { headers: { Authorization: `Bearer ${token}` } },
                 });
 
-                // Verify user and check quota
-                const { data: userData, error: userError } = await supabase.auth.getUser();
+                const { data: userData } = await supabase.auth.getUser();
+                if (userData?.user) {
+                    const { data: usageData, error: usageError } = await supabase
+                        .rpc('check_and_increment_tryons', { daily_limit: DAILY_LIMIT });
 
-                if (userError) {
-                    console.error('Auth error:', userError);
-                    return res.status(401).json({ error: 'Invalid authentication token' });
+                    if (!usageError && !usageData?.allowed) {
+                        return res.status(429).json({
+                            error: `Daily limit of ${DAILY_LIMIT} try-ons reached. Resets tomorrow.`,
+                            usage: usageData,
+                        });
+                    }
                 }
-
-                const user = userData?.user;
-                if (!user) {
-                    return res.status(401).json({ error: 'User not authenticated' });
-                }
-
-                // Check and increment daily usage
-                const { data: usageData, error: usageError } = await supabase
-                    .rpc('check_and_increment_tryons', { daily_limit: DAILY_LIMIT });
-
-                if (usageError) {
-                    console.error('Usage check error:', usageError);
-                    return res.status(500).json({ error: 'Failed to check usage quota' });
-                }
-
-                if (!usageData?.allowed) {
-                    return res.status(429).json({
-                        error: `Daily limit of ${DAILY_LIMIT} try-ons reached. Resets tomorrow.`,
-                        usage: usageData,
-                    });
-                }
-
-                console.log(`User ${user.id} usage:`, usageData);
             } catch (error) {
-                console.error('Supabase quota check failed:', error);
-                // Continue with generation if quota check fails (fail open for better UX)
+                console.error('Quota check failed:', error);
             }
         }
     }
-    // For anonymous users, IP rate limit is the only enforcement
+    */
 
     try {
         const { lipstickImage, selfieImage } = req.body;
