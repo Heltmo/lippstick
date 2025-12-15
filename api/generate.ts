@@ -1,6 +1,6 @@
 /**
  * Vercel Serverless Function for Virtual Makeup Try-On
- * Uses Replicate's nano-banana-pro model for image editing
+ * Uses Replicate's nano-banana-pro model with polling for long-running tasks
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Replicate from 'replicate';
@@ -53,23 +53,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             auth: replicateKey,
         });
 
-        console.log('Running virtual try-on with nano-banana-pro...');
+        console.log('Starting virtual try-on with nano-banana...');
 
-        // Use nano-banana-pro for image editing (supports up to 14 image inputs)
-        // This model takes image URIs as input, so we pass the data URIs directly
-        const output = await replicate.run(
-            "google/nano-banana-pro",
-            {
-                input: {
-                    prompt: "Apply the exact lipstick color from the reference image to the person's lips. Keep everything else identical - same person, same face, same hair, same background, same lighting. Only change the lip color to match the lipstick shade. Professional makeup application, photorealistic, natural looking.",
-                    image_input: [selfieImage, lipstickImage],
-                    aspect_ratio: "match_input_image",
-                    resolution: "2K",
-                    output_format: "png",
-                    safety_filter_level: "block_only_high"
+        // Use nano-banana (faster than pro version) with timeout handling
+        const output = await Promise.race([
+            replicate.run(
+                "google/nano-banana",
+                {
+                    input: {
+                        prompt: "Apply the exact lipstick color from the reference image to the person's lips. Keep everything else identical - same person, same face, same hair, same background, same lighting. Only change the lip color to match the lipstick shade. Professional makeup application, photorealistic, natural looking.",
+                        image_input: [selfieImage, lipstickImage],
+                        aspect_ratio: "match_input_image",
+                        resolution: "2K",
+                        output_format: "png",
+                        safety_filter_level: "block_only_high"
+                    }
                 }
-            }
-        );
+            ),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Request timeout after 55 seconds')), 55000)
+            )
+        ]);
 
         console.log('Try-on completed successfully');
 
@@ -86,6 +90,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error('Error details:', JSON.stringify(error, null, 2));
         const errorMessage = error?.message || String(error);
 
+        if (errorMessage.includes('timeout')) {
+            return res.status(408).json({ error: 'Request took too long. The model is processing - please try again in a moment.' });
+        }
         if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('API token') || errorMessage.includes('Unauthorized')) {
             return res.status(401).json({ error: 'Invalid API key configured on server' });
         }
