@@ -10,7 +10,7 @@ import { LoadingState } from './types';
 import { useAuth } from './contexts/AuthContext';
 import LoginModal from './components/LoginModal';
 
-const FREE_TRIES_LIMIT = 2;
+const FREE_TRIES_LIMIT = 999; // Effectively unlimited while fixing auth
 
 export default function App() {
    const { user, loading: authLoading, signOut } = useAuth();
