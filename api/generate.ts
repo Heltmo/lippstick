@@ -1,9 +1,9 @@
 /**
- * Vercel Serverless Function for Gemini API
- * Two-step: Extract color first, then apply with explicit hex value
+ * Vercel Serverless Function for Virtual Makeup Try-On
+ * Uses Replicate's nano-banana-pro model for image editing
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI, Modality } from '@google/genai';
+import Replicate from 'replicate';
 import { rateLimit } from '../lib/rateLimit';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -44,140 +44,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: 'Image files are too large. Please use images smaller than 5MB.' });
         }
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
+        const replicateKey = process.env.REPLICATE_API_TOKEN;
+        if (!replicateKey) {
             return res.status(500).json({ error: 'Server configuration error: API key not set' });
         }
 
-        const ai = new GoogleGenAI({ apiKey });
-        const getBase64Data = (dataUrl: string): string => dataUrl.split(',')[1];
-
-        // ============================================
-        // STEP 1: Extract exact color from lipstick
-        // ============================================
-        console.log('Step 1: Extracting lipstick color...');
-
-        const colorResponse = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: {
-                parts: [
-                    {
-                        inlineData: {
-                            mimeType: 'image/png',
-                            data: getBase64Data(lipstickImage),
-                        },
-                    },
-                    {
-                        text: `Analyze this lipstick image carefully. Look at the actual lipstick bullet/product color, NOT the packaging.
-
-Extract the EXACT color of the lipstick and provide:
-1. The precise HEX color code
-2. The RGB values
-3. A descriptive color name (e.g., "deep burgundy", "nude mauve", "coral pink")
-
-Respond ONLY in this exact JSON format, nothing else:
-{"hex": "#XXXXXX", "rgb": {"r": 0, "g": 0, "b": 0}, "name": "color name"}`,
-                    },
-                ],
-            },
+        const replicate = new Replicate({
+            auth: replicateKey,
         });
 
-        // Parse the color
-        let colorInfo = { hex: '#8B4557', name: 'mauve' }; // fallback
-        try {
-            const colorText = colorResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            console.log('Color extraction response:', colorText);
+        console.log('Running virtual try-on with nano-banana-pro...');
 
-            const jsonMatch = colorText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                colorInfo = {
-                    hex: parsed.hex || '#8B4557',
-                    name: parsed.name || 'lipstick shade',
-                };
-            }
-        } catch (e) {
-            console.error('Color parsing failed:', e);
-        }
-
-        console.log('Extracted color:', colorInfo);
-
-        // ============================================
-        // STEP 2: Apply lipstick with exact color
-        // ============================================
-        console.log('Step 2: Applying lipstick with color', colorInfo.hex);
-
-        const editPrompt = `You are a professional photo retoucher. Edit this selfie photo.
-
-TASK: Apply lipstick color ${colorInfo.hex} (${colorInfo.name}) to the person's lips.
-
-CRITICAL INSTRUCTIONS:
-1. Apply EXACTLY the color ${colorInfo.hex} to the lips - this is a ${colorInfo.name} shade
-2. The output must be the EXACT SAME PERSON as the input
-3. Change NOTHING except the lip color:
-   - Same face shape
-   - Same skin
-   - Same hair
-   - Same eyes
-   - Same eyebrows
-   - Same lighting
-   - Same background
-   - Same resolution
-4. Apply the lipstick naturally following the lip contours
-5. Keep natural lip texture and shadows
-
-Output: The same photo with only the lip color changed to ${colorInfo.hex}.`;
-
-        const editResponse = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: {
-                parts: [
-                    {
-                        inlineData: {
-                            mimeType: 'image/png',
-                            data: getBase64Data(selfieImage),
-                        },
-                    },
-                    {
-                        text: editPrompt,
-                    },
-                ],
-            },
-            config: {
-                responseModalities: [Modality.TEXT, Modality.IMAGE],
-            },
-        });
-
-        const candidates = editResponse.candidates;
-        if (candidates && candidates[0]?.content?.parts) {
-            for (const part of candidates[0].content.parts) {
-                if (part.inlineData && part.inlineData.data) {
-                    return res.status(200).json({
-                        success: true,
-                        image: `data:image/png;base64,${part.inlineData.data}`,
-                        extractedColor: colorInfo,
-                    });
+        // Use nano-banana-pro for image editing
+        // This model can edit images based on text prompts
+        const output = await replicate.run(
+            "google/nano-banana-pro",
+            {
+                input: {
+                    image: selfieImage,
+                    prompt: "Apply the exact lipstick color from the reference image to the lips. Keep everything else identical - same person, same face, same hair, same background, same lighting. Only change the lip color to match the lipstick shade. Professional makeup application, photorealistic.",
+                    negative_prompt: "different person, different face, blur, distortion, low quality, artifacts",
+                    num_inference_steps: 28,
+                    guidance_scale: 3.5,
+                    output_format: "png",
+                    output_quality: 90,
+                    aspect_ratio: "1:1"
                 }
             }
-        }
+        );
 
-        return res.status(500).json({ error: 'No image data found in response' });
+        console.log('Try-on completed successfully');
+
+        // Output is an array of URLs or a single URL
+        const resultUrl = Array.isArray(output) ? output[0] : output;
+
+        return res.status(200).json({
+            success: true,
+            image: resultUrl,
+        });
+
     } catch (error: any) {
         console.error('Generate API error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
         const errorMessage = error?.message || String(error);
 
-        if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('API key not valid')) {
+        if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('API token')) {
             return res.status(401).json({ error: 'Invalid API key configured on server' });
         }
         if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('403')) {
-            return res.status(403).json({ error: 'API key does not have permission for this model' });
+            return res.status(403).json({ error: 'API key does not have permission' });
         }
         if (errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
             return res.status(429).json({ error: 'API quota exceeded. Please try again later.' });
-        }
-        if (errorMessage.includes('not available in your country')) {
-            return res.status(403).json({ error: 'Image generation is not available in your region' });
         }
 
         return res.status(500).json({ error: `Generation failed: ${errorMessage}` });
