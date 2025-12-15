@@ -27,16 +27,21 @@ export default function App() {
 
    // Load free tries from localStorage on mount
    useEffect(() => {
-      if (!user) {
-         const stored = localStorage.getItem('freeTriesUsed');
-         setFreeTriesUsed(stored ? parseInt(stored, 10) : 0);
-      } else {
-         // Logged in users get unlimited
-         setFreeTriesUsed(0);
-         setShowResultLock(false);
-         // Clear localStorage when user logs in
-         localStorage.removeItem('freeTriesUsed');
-      }
+      // DISABLED: Always clear lock and reset tries while fixing Supabase auth
+      setFreeTriesUsed(0);
+      setShowResultLock(false);
+      localStorage.removeItem('freeTriesUsed');
+
+      // if (!user) {
+      //    const stored = localStorage.getItem('freeTriesUsed');
+      //    setFreeTriesUsed(stored ? parseInt(stored, 10) : 0);
+      // } else {
+      //    // Logged in users get unlimited
+      //    setFreeTriesUsed(0);
+      //    setShowResultLock(false);
+      //    // Clear localStorage when user logs in
+      //    localStorage.removeItem('freeTriesUsed');
+      // }
    }, [user]);
 
    const handleFile = (file: File, setter: (val: string | null) => void) => {
@@ -83,17 +88,18 @@ export default function App() {
          const result = await generateTryOn(tryOnLipstick, tryOnSelfie);
          setTryOnResult(result);
 
+         // DISABLED: Free tier limit temporarily disabled while fixing Supabase auth
          // After showing result, check if we should lock it
-         if (!user) {
-            const newCount = freeTriesUsed + 1;
-            setFreeTriesUsed(newCount);
-            localStorage.setItem('freeTriesUsed', newCount.toString());
-
-            if (newCount >= FREE_TRIES_LIMIT) {
-               // Show lock overlay after 2nd try
-               setShowResultLock(true);
-            }
-         }
+         // if (!user) {
+         //    const newCount = freeTriesUsed + 1;
+         //    setFreeTriesUsed(newCount);
+         //    localStorage.setItem('freeTriesUsed', newCount.toString());
+         //
+         //    if (newCount >= FREE_TRIES_LIMIT) {
+         //       // Show lock overlay after 2nd try
+         //       setShowResultLock(true);
+         //    }
+         // }
       } catch (e: any) {
          const errorMessage = e.message || String(e);
          let userMessage = 'Unable to apply makeup. Please try again.';
