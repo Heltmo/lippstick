@@ -37,7 +37,8 @@ Add these variables (if not already present):
 |----------|-------|-------|
 | `VITE_SUPABASE_URL` | `https://afqzpnwsxzhcffrrnyjw.supabase.co` | Already set ✅ |
 | `VITE_SUPABASE_ANON_KEY` | `sb_publishable_...` | Already set ✅ |
-| `DAILY_TRYON_LIMIT` | `50` | **NEW** - Set your desired daily limit |
+| `ANON_DAILY_TRYON_LIMIT` | `3` | **NEW** - Anonymous (cookie) daily limit |
+| `USER_DAILY_TRYON_LIMIT` | `4` | **NEW** - Signed-in user daily limit |
 | `REPLICATE_API_TOKEN` | Your Replicate token | Already set ✅ |
 
 **Recommended limits:**
@@ -181,7 +182,7 @@ LIMIT 30;
 ## Adjusting Limits
 
 ### Change daily limit:
-Update `DAILY_TRYON_LIMIT` in Vercel environment variables
+Update `ANON_DAILY_TRYON_LIMIT` and `USER_DAILY_TRYON_LIMIT` in Vercel environment variables
 
 ### Change IP rate limit:
 Edit `api/generate.ts`, line 33:
@@ -227,7 +228,7 @@ $$;
 - Verify Supabase credentials in Vercel env vars
 
 ### Users hitting limit too quickly:
-- Increase `DAILY_TRYON_LIMIT` in Vercel
+- Increase `ANON_DAILY_TRYON_LIMIT` / `USER_DAILY_TRYON_LIMIT` in Vercel
 - Check for bot traffic in usage table
 
 ### Quota not resetting daily:
@@ -254,4 +255,3 @@ $$;
 3. **Premium tiers**: Different limits for free/paid users
 4. **Analytics**: Track usage patterns to optimize limits
 5. **Reset button**: Admin function to reset specific user's quota
-

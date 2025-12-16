@@ -12,6 +12,12 @@ const USER_DAILY_LIMIT = Number(process.env.USER_DAILY_TRYON_LIMIT || '4');
 const ANON_DAILY_LIMIT = Number(process.env.ANON_DAILY_TRYON_LIMIT || '3');
 const ANON_COOKIE = '__Host-tryon_anon';
 
+console.log("[quota]", {
+    anon: process.env.ANON_DAILY_TRYON_LIMIT,
+    user: process.env.USER_DAILY_TRYON_LIMIT,
+    legacy: process.env.DAILY_TRYON_LIMIT,
+});
+
 function getClientIp(req: VercelRequest): string {
     const xForwardedFor = req.headers['x-forwarded-for'];
     if (typeof xForwardedFor === 'string') {
