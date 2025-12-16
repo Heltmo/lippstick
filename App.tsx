@@ -9,6 +9,7 @@ import { generateTryOn } from './services/geminiService';
 import { LoadingState } from './types';
 import { useAuth } from './contexts/AuthContext';
 import LoginModal from './components/LoginModal';
+import AuthCallback from './src/pages/AuthCallback';
 
 const ANON_TRIES_LIMIT = 3;
 const SIGNED_IN_TRIES_LIMIT = 4;
@@ -18,6 +19,11 @@ function getUtcDayKey() {
 }
 
 export default function App() {
+   // Simple routing: render AuthCallback for /auth/callback path
+   if (window.location.pathname === '/auth/callback') {
+      return <AuthCallback />;
+   }
+
    const { user, loading: authLoading, signOut } = useAuth();
    const [tryOnLipstick, setTryOnLipstick] = useState<string | null>(null);
    const [tryOnSelfie, setTryOnSelfie] = useState<string | null>(null);
