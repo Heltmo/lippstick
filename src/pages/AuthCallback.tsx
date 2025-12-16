@@ -11,8 +11,19 @@ export default function AuthCallback() {
             console.log('[auth-callback] current URL:', window.location.href);
 
             try {
-                // Exchange code for session
-                const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+                // Get code from URL params
+                const params = new URLSearchParams(window.location.search);
+                const code = params.get('code');
+
+                if (!code) {
+                    console.error('[auth-callback] no code in URL');
+                    alert('Login failed: missing authorization code. Please try again.');
+                    window.location.href = '/';
+                    return;
+                }
+
+                console.log('[auth-callback] exchanging code for session');
+                const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
                 if (error) {
                     console.error('[auth-callback] exchange failed:', error);
