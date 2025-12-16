@@ -95,7 +95,7 @@ export default function App() {
 
       if (!user && freeTriesUsed >= ANON_TRIES_LIMIT) {
          setShowResultLock(true);
-         if (!authLoading) setShowLogin(true);
+         setShowLogin(true);
          return;
       }
 
@@ -129,8 +129,7 @@ export default function App() {
          let userMessage = 'Unable to apply makeup. Please try again.';
 
          if (
-            !authLoading &&
-            (errorMessage.toLowerCase().includes('sign in to continue') || errorMessage.toLowerCase().includes('anon limit'))
+            errorMessage.toLowerCase().includes('sign in to continue') || errorMessage.toLowerCase().includes('anon limit')
          ) {
             setShowResultLock(true);
             setShowLogin(true);

@@ -110,18 +110,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const initAuth = async () => {
-            // Watchdog so the app can't be stuck on the loading spinner forever.
-            const watchdog = setTimeout(() => {
-                if (!isMounted) return;
-                if (isDev) {
-                    console.log('[auth] init watchdog fired; stopping loading spinner');
-                }
-                setLoading(false);
-            }, 5000);
-
             try {
-                const { data, error } = await supabase.auth.getSession();
-                if (error) throw error;
+                const { data } = await supabase.auth.getSession();
 
                 if (!isMounted) return;
                 const initialSession = data.session;
@@ -136,15 +126,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } else {
                     setProfile(null);
                 }
-            } catch (error) {
-                if (isDev) {
-                    console.log('[auth] init getSession error', error);
-                }
-                // Don't force a "fallback to anonymous" here; just stop blocking the UI.
             } finally {
-                clearTimeout(watchdog);
-                if (!isMounted) return;
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         };
 
