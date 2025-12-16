@@ -10,7 +10,8 @@ import { LoadingState } from './types';
 import { useAuth } from './contexts/AuthContext';
 import LoginModal from './components/LoginModal';
 
-const FREE_TRIES_LIMIT = 999; // Effectively unlimited while fixing auth
+const ANON_TRIES_LIMIT = 3;
+const SIGNED_IN_TRIES_LIMIT = 4;
 
 export default function App() {
    const { user, loading: authLoading, signOut } = useAuth();
@@ -21,21 +22,22 @@ export default function App() {
    const [showLogin, setShowLogin] = useState(false);
    const [showResultLock, setShowResultLock] = useState(false);
    const [freeTriesUsed, setFreeTriesUsed] = useState(0);
+   const [signedInTriesUsed, setSignedInTriesUsed] = useState(0);
 
    const lipstickInputRef = useRef<HTMLInputElement>(null);
    const selfieInputRef = useRef<HTMLInputElement>(null);
 
-   // Load free tries from localStorage on mount
+   // Load tries from localStorage on mount / auth change
    useEffect(() => {
       if (!user) {
          const stored = localStorage.getItem('freeTriesUsed');
          setFreeTriesUsed(stored ? parseInt(stored, 10) : 0);
+         setSignedInTriesUsed(0);
       } else {
-         // Logged in users get unlimited
-         setFreeTriesUsed(0);
          setShowResultLock(false);
-         // Clear localStorage when user logs in
-         localStorage.removeItem('freeTriesUsed');
+
+         const storedSignedIn = localStorage.getItem(`signedInTriesUsed:${user.id}`);
+         setSignedInTriesUsed(storedSignedIn ? parseInt(storedSignedIn, 10) : 0);
       }
    }, [user]);
 
@@ -77,6 +79,17 @@ export default function App() {
    const handleTryOn = async () => {
       if (!tryOnLipstick || !tryOnSelfie) return;
 
+      if (!user && freeTriesUsed >= ANON_TRIES_LIMIT) {
+         setShowResultLock(true);
+         setShowLogin(true);
+         return;
+      }
+
+      if (user && signedInTriesUsed >= SIGNED_IN_TRIES_LIMIT) {
+         alert('You have used all your signed-in tries for now.');
+         return;
+      }
+
       // Allow the try-on to happen
       setLoading({ isGenerating: true, message: 'Applying makeup...' });
       try {
@@ -89,10 +102,13 @@ export default function App() {
             setFreeTriesUsed(newCount);
             localStorage.setItem('freeTriesUsed', newCount.toString());
 
-            if (newCount >= FREE_TRIES_LIMIT) {
-               // Show lock overlay after 2nd try
+            if (newCount >= ANON_TRIES_LIMIT) {
                setShowResultLock(true);
             }
+         } else {
+            const newSignedInCount = signedInTriesUsed + 1;
+            setSignedInTriesUsed(newSignedInCount);
+            localStorage.setItem(`signedInTriesUsed:${user.id}`, newSignedInCount.toString());
          }
       } catch (e: any) {
          const errorMessage = e.message || String(e);
@@ -256,7 +272,7 @@ export default function App() {
                >
                   {loading.isGenerating ? "Applying Makeup..." : "See It On You"}
                </Button>
-               {!user && freeTriesUsed < FREE_TRIES_LIMIT && (
+               {!user && freeTriesUsed < ANON_TRIES_LIMIT && (
                   <p className="text-gray-400 text-sm mt-3">No signup required for your first look</p>
                )}
             </div>
