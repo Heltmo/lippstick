@@ -97,8 +97,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
         let isMounted = true;
+        const supabaseConfigured = !!import.meta?.env?.VITE_SUPABASE_URL && !!import.meta?.env?.VITE_SUPABASE_ANON_KEY;
+
+        if (!supabaseConfigured) {
+            if (isDev) {
+                console.log('[auth] supabase not configured; skipping auth init');
+            }
+            setLoading(false);
+            return () => {
+                isMounted = false;
+            };
+        }
 
         const initAuth = async () => {
+            // Watchdog so the app can't be stuck on the loading spinner forever.
+            const watchdog = setTimeout(() => {
+                if (!isMounted) return;
+                if (isDev) {
+                    console.log('[auth] init watchdog fired; stopping loading spinner');
+                }
+                setLoading(false);
+            }, 5000);
+
             try {
                 const { data, error } = await supabase.auth.getSession();
                 if (error) throw error;
@@ -120,11 +140,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (isDev) {
                     console.log('[auth] init getSession error', error);
                 }
-                if (!isMounted) return;
-                setSession(null);
-                setUser(null);
-                setProfile(null);
+                // Don't force a "fallback to anonymous" here; just stop blocking the UI.
             } finally {
+                clearTimeout(watchdog);
                 if (!isMounted) return;
                 setLoading(false);
             }
