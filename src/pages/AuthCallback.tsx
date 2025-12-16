@@ -7,18 +7,26 @@ import { supabase } from '../../lib/supabase';
 export default function AuthCallback() {
     useEffect(() => {
         const handleCallback = async () => {
+            console.log('[auth-callback] starting code exchange');
+            console.log('[auth-callback] current URL:', window.location.href);
+
             try {
                 // Exchange code for session
-                const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+                const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
 
                 if (error) {
                     console.error('[auth-callback] exchange failed:', error);
+                    alert(`Login failed: ${error.message}. Please try again.`);
+                } else {
+                    console.log('[auth-callback] exchange successful:', { hasSession: !!data?.session, hasUser: !!data?.session?.user });
                 }
 
                 // Always redirect to home (session will be picked up by AuthContext)
+                console.log('[auth-callback] redirecting to home');
                 window.location.href = '/';
             } catch (err) {
                 console.error('[auth-callback] unexpected error:', err);
+                alert(`Unexpected error during login. Please try again.`);
                 window.location.href = '/';
             }
         };
