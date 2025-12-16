@@ -15,14 +15,10 @@ export const generateTryOn = async (
 ): Promise<string> => {
   try {
     // Get current session token to send to API for quota enforcement
-    // Use timeout to prevent hanging if Supabase is slow
     let token: string | undefined;
     try {
-      const sessionPromise = supabase.auth.getSession();
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Session timeout')), 10000)
-      );
-      const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+      const { data: sessionData, error } = await supabase.auth.getSession();
+      if (error) throw error;
       token = sessionData?.session?.access_token;
     } catch (error) {
       console.warn('Failed to get session, continuing without auth token:', error);
@@ -36,6 +32,10 @@ export const generateTryOn = async (
     // Include auth token if user is logged in
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    if (import.meta?.env?.DEV) {
+      console.log('[generateTryOn] Authorization attached:', !!token);
     }
 
     const response = await fetch('/api/generate', {

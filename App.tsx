@@ -85,9 +85,11 @@ export default function App() {
       if (!tryOnLipstick || !tryOnSelfie) return;
       const dayKey = getUtcDayKey();
 
+      if (authLoading) return;
+
       if (!user && freeTriesUsed >= ANON_TRIES_LIMIT) {
          setShowResultLock(true);
-         setShowLogin(true);
+         if (!authLoading) setShowLogin(true);
          return;
       }
 
@@ -120,7 +122,10 @@ export default function App() {
          const errorMessage = e.message || String(e);
          let userMessage = 'Unable to apply makeup. Please try again.';
 
-         if (errorMessage.toLowerCase().includes('sign in to continue') || errorMessage.toLowerCase().includes('anon limit')) {
+         if (
+            !authLoading &&
+            (errorMessage.toLowerCase().includes('sign in to continue') || errorMessage.toLowerCase().includes('anon limit'))
+         ) {
             setShowResultLock(true);
             setShowLogin(true);
          }

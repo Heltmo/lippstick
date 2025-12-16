@@ -22,6 +22,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [session, setSession] = useState<Session | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const isDev = !!import.meta?.env?.DEV;
 
     // Fetch or create user profile
     const fetchProfile = async (userId: string, email: string) => {
@@ -95,47 +96,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     useEffect(() => {
-        // Get initial session with timeout to prevent hanging
+        let isMounted = true;
+
         const initAuth = async () => {
             try {
-                const sessionPromise = supabase.auth.getSession();
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Auth timeout')), 10000)
-                );
+                const { data, error } = await supabase.auth.getSession();
+                if (error) throw error;
 
-                const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+                if (!isMounted) return;
+                const initialSession = data.session;
+                if (isDev) {
+                    console.log('[auth] init getSession', { hasUser: !!initialSession?.user });
+                }
 
-                setSession(session);
-                setUser(session?.user ?? null);
-                if (session?.user) {
-                    await fetchProfile(session.user.id, session.user.email || '');
+                setSession(initialSession);
+                setUser(initialSession?.user ?? null);
+                if (initialSession?.user) {
+                    await fetchProfile(initialSession.user.id, initialSession.user.email || '');
+                } else {
+                    setProfile(null);
                 }
             } catch (error) {
-                console.warn('Auth init failed or timed out, continuing as anonymous:', error);
+                if (isDev) {
+                    console.log('[auth] init getSession error', error);
+                }
+                if (!isMounted) return;
                 setSession(null);
                 setUser(null);
+                setProfile(null);
             } finally {
+                if (!isMounted) return;
                 setLoading(false);
             }
         };
 
         initAuth();
 
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (event, session) => {
-                setSession(session);
-                setUser(session?.user ?? null);
-                if (session?.user) {
-                    await fetchProfile(session.user.id, session.user.email || '');
-                } else {
-                    setProfile(null);
-                }
-                setLoading(false);
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+            if (isDev) {
+                console.log('[auth] onAuthStateChange', { event, hasUser: !!nextSession?.user });
             }
-        );
+
+            setSession(nextSession);
+            setUser(nextSession?.user ?? null);
+            if (nextSession?.user) {
+                await fetchProfile(nextSession.user.id, nextSession.user.email || '');
+            } else {
+                setProfile(null);
+            }
+        });
 
         return () => {
+            isMounted = false;
             subscription.unsubscribe();
         };
     }, []);
