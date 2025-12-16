@@ -13,6 +13,10 @@ import LoginModal from './components/LoginModal';
 const ANON_TRIES_LIMIT = 3;
 const SIGNED_IN_TRIES_LIMIT = 4;
 
+function getUtcDayKey() {
+   return new Date().toISOString().slice(0, 10);
+}
+
 export default function App() {
    const { user, loading: authLoading, signOut } = useAuth();
    const [tryOnLipstick, setTryOnLipstick] = useState<string | null>(null);
@@ -29,14 +33,15 @@ export default function App() {
 
    // Load tries from localStorage on mount / auth change
    useEffect(() => {
+      const dayKey = getUtcDayKey();
       if (!user) {
-         const stored = localStorage.getItem('freeTriesUsed');
+         const stored = localStorage.getItem(`freeTriesUsed:${dayKey}`);
          setFreeTriesUsed(stored ? parseInt(stored, 10) : 0);
          setSignedInTriesUsed(0);
       } else {
          setShowResultLock(false);
 
-         const storedSignedIn = localStorage.getItem(`signedInTriesUsed:${user.id}`);
+         const storedSignedIn = localStorage.getItem(`signedInTriesUsed:${user.id}:${dayKey}`);
          setSignedInTriesUsed(storedSignedIn ? parseInt(storedSignedIn, 10) : 0);
       }
    }, [user]);
@@ -78,6 +83,7 @@ export default function App() {
 
    const handleTryOn = async () => {
       if (!tryOnLipstick || !tryOnSelfie) return;
+      const dayKey = getUtcDayKey();
 
       if (!user && freeTriesUsed >= ANON_TRIES_LIMIT) {
          setShowResultLock(true);
@@ -100,7 +106,7 @@ export default function App() {
          if (!user) {
             const newCount = freeTriesUsed + 1;
             setFreeTriesUsed(newCount);
-            localStorage.setItem('freeTriesUsed', newCount.toString());
+            localStorage.setItem(`freeTriesUsed:${dayKey}`, newCount.toString());
 
             if (newCount >= ANON_TRIES_LIMIT) {
                setShowResultLock(true);
@@ -108,11 +114,16 @@ export default function App() {
          } else {
             const newSignedInCount = signedInTriesUsed + 1;
             setSignedInTriesUsed(newSignedInCount);
-            localStorage.setItem(`signedInTriesUsed:${user.id}`, newSignedInCount.toString());
+            localStorage.setItem(`signedInTriesUsed:${user.id}:${dayKey}`, newSignedInCount.toString());
          }
       } catch (e: any) {
          const errorMessage = e.message || String(e);
          let userMessage = 'Unable to apply makeup. Please try again.';
+
+         if (errorMessage.toLowerCase().includes('sign in to continue') || errorMessage.toLowerCase().includes('anon limit')) {
+            setShowResultLock(true);
+            setShowLogin(true);
+         }
 
          if (errorMessage.includes('Too many requests')) {
             userMessage = 'You\'ve made too many requests. Please wait a bit before trying again.';

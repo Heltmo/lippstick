@@ -4,10 +4,13 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Replicate from 'replicate';
-// import { createClient } from '@supabase/supabase-js'; // Uncomment when enabling quotas
+import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 import { rateLimit } from '../lib/rateLimit.js';
 
-// const DAILY_LIMIT = Number(process.env.DAILY_TRYON_LIMIT || '50'); // Uncomment when enabling quotas
+const USER_DAILY_LIMIT = Number(process.env.USER_DAILY_TRYON_LIMIT || '4');
+const ANON_DAILY_LIMIT = Number(process.env.ANON_DAILY_TRYON_LIMIT || '3');
+const ANON_COOKIE = '__Host-tryon_anon';
 
 function getClientIp(req: VercelRequest): string {
     const xForwardedFor = req.headers['x-forwarded-for'];
@@ -15,6 +18,36 @@ function getClientIp(req: VercelRequest): string {
         return xForwardedFor.split(',')[0].trim();
     }
     return (req.headers['x-real-ip'] as string) || req.socket?.remoteAddress || 'unknown';
+}
+
+function parseCookies(req: VercelRequest): Record<string, string> {
+    const header = req.headers.cookie;
+    const out: Record<string, string> = {};
+    if (!header) return out;
+    for (const part of header.split(';')) {
+        const [key, ...valueParts] = part.trim().split('=');
+        if (!key) continue;
+        out[key] = decodeURIComponent(valueParts.join('=') || '');
+    }
+    return out;
+}
+
+function setAnonCookie(res: VercelResponse, value: string) {
+    const secure = process.env.VERCEL ? '; Secure' : '';
+    const cookie = `${ANON_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`;
+    const prev = res.getHeader('Set-Cookie');
+    if (!prev) res.setHeader('Set-Cookie', cookie);
+    else if (Array.isArray(prev)) res.setHeader('Set-Cookie', [...prev, cookie]);
+    else res.setHeader('Set-Cookie', [prev as string, cookie]);
+}
+
+function getOrCreateAnonId(req: VercelRequest, res: VercelResponse): string {
+    const cookies = parseCookies(req);
+    const existing = cookies[ANON_COOKIE];
+    if (existing && existing.length >= 16) return existing;
+    const id = crypto.randomBytes(16).toString('hex');
+    setAnonCookie(res, id);
+    return id;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -26,53 +59,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // 1) IP-based rate limiting (bot protection, always enabled)
+    // 1) Get auth token early for rate limiting decisions
     const clientIp = getClientIp(req);
-    const ipAllowed = rateLimit(`tryon:${clientIp}`, {
-        interval: 60 * 60 * 1000, // 1 hour
-        maxRequests: 10, // 10 per hour per IP (increased from 5 for logged-in users)
-    });
-
-    if (!ipAllowed) {
-        return res.status(429).json({
-            error: 'Too many requests from this IP. Please try again later.'
-        });
-    }
-
-    // 2) User-based daily quota enforcement (DISABLED - run SQL in Supabase first)
-    // TODO: Uncomment after running supabase-usage-schema.sql in Supabase
-    /*
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-    if (token) {
-        const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-        const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    // IP-based rate limiting - stricter for anonymous, lenient for authenticated
+    const ipRateLimit = token
+        ? { interval: 60 * 60 * 1000, maxRequests: 20 } // Authenticated: 20/hour (generous for legitimate use)
+        : { interval: 60 * 60 * 1000, maxRequests: 5 };  // Anonymous: 5/hour (prevents localStorage bypass abuse)
 
-        if (supabaseUrl && supabaseAnonKey) {
-            try {
-                const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-                    global: { headers: { Authorization: `Bearer ${token}` } },
-                });
+    const ipAllowed = rateLimit(`tryon:${clientIp}`, ipRateLimit);
 
-                const { data: userData } = await supabase.auth.getUser();
-                if (userData?.user) {
-                    const { data: usageData, error: usageError } = await supabase
-                        .rpc('check_and_increment_tryons', { daily_limit: DAILY_LIMIT });
-
-                    if (!usageError && !usageData?.allowed) {
-                        return res.status(429).json({
-                            error: `Daily limit of ${DAILY_LIMIT} try-ons reached. Resets tomorrow.`,
-                            usage: usageData,
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error('Quota check failed:', error);
-            }
-        }
+    if (!ipAllowed) {
+        return res.status(429).json({
+            error: token
+                ? 'Too many requests. Please wait before trying again.'
+                : 'Too many requests from this IP. Sign in for higher limits or try again later.'
+        });
     }
-    */
 
     try {
         const { lipstickImage, selfieImage } = req.body;
@@ -85,6 +90,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const MAX_BASE64_SIZE = 7 * 1024 * 1024; // ~5MB original file size
         if (lipstickImage.length > MAX_BASE64_SIZE || selfieImage.length > MAX_BASE64_SIZE) {
             return res.status(400).json({ error: 'Image files are too large. Please use images smaller than 5MB.' });
+        }
+
+        // 2) Server-side daily quota enforcement (Supabase RPC)
+        const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+        if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+            return res.status(500).json({ error: 'Server configuration error: Supabase env not set' });
+        }
+
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+        // Prefer authenticated quota if token is valid; otherwise fall back to anonymous quota.
+        let usedAuthenticatedQuota = false;
+        if (token) {
+            const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+                global: { headers: { Authorization: `Bearer ${token}` } },
+            });
+
+            const { data: userData, error: userErr } = await supabaseUser.auth.getUser();
+            if (!userErr && userData?.user) {
+                const { data: usageData, error: usageError } = await supabaseUser
+                    .rpc('check_and_increment_tryons', { daily_limit: USER_DAILY_LIMIT });
+
+                if (usageError) {
+                    return res.status(500).json({ error: 'Quota check failed', details: usageError.message });
+                }
+                if (!usageData?.allowed) {
+                    return res.status(429).json({
+                        error: `Daily limit reached (${usageData.count}/${usageData.limit}). Resets tomorrow.`,
+                        usage: usageData,
+                    });
+                }
+                usedAuthenticatedQuota = true;
+            }
+        }
+
+        if (!usedAuthenticatedQuota) {
+            const anonId = getOrCreateAnonId(req, res);
+            const { data: anonUsage, error: anonErr } = await supabaseAdmin.rpc('check_and_increment_tryons_anon', {
+                p_anon_id: anonId,
+                daily_limit: ANON_DAILY_LIMIT,
+            });
+
+            if (anonErr) {
+                return res.status(500).json({ error: 'Anon quota check failed', details: anonErr.message });
+            }
+            if (!anonUsage?.allowed) {
+                return res.status(429).json({
+                    error: 'Anon limit reached. Sign in to continue.',
+                    usage: anonUsage,
+                });
+            }
         }
 
         const replicateKey = process.env.REPLICATE_API_TOKEN;

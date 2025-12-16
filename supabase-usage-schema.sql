@@ -86,3 +86,62 @@ $$;
 -- SUPABASE_URL=https://afqzpnwsxzhcffrrnyjw.supabase.co
 -- SUPABASE_ANON_KEY=your_anon_key
 -- DAILY_TRYON_LIMIT=50
+
+-- ============================================
+-- Anonymous (cookie-based) usage tracking
+-- Server-side only (intended to be called with service_role)
+-- ============================================
+
+create table if not exists tryon_anon_usage (
+  anon_id text not null,
+  day date not null,
+  count integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (anon_id, day)
+);
+
+alter table tryon_anon_usage enable row level security;
+
+revoke all on table tryon_anon_usage from anon, authenticated;
+grant all on table tryon_anon_usage to service_role;
+
+create or replace function check_and_increment_tryons_anon(p_anon_id text, daily_limit integer)
+returns json
+language plpgsql
+security definer
+as $$
+declare
+  today date := (now() at time zone 'utc')::date;
+  new_count integer;
+begin
+  if p_anon_id is null or length(p_anon_id) < 16 then
+    return json_build_object('allowed', false, 'error', 'bad_anon_id');
+  end if;
+
+  insert into tryon_anon_usage (anon_id, day, count)
+  values (p_anon_id, today, 1)
+  on conflict (anon_id, day) do update
+    set count = tryon_anon_usage.count + 1,
+        updated_at = now()
+    where tryon_anon_usage.count < daily_limit
+  returning count into new_count;
+
+  if new_count is null then
+    select count into new_count
+    from tryon_anon_usage
+    where anon_id = p_anon_id and day = today;
+
+    return json_build_object('allowed', false, 'count', new_count, 'limit', daily_limit, 'remaining', 0);
+  end if;
+
+  return json_build_object(
+    'allowed', true,
+    'count', new_count,
+    'limit', daily_limit,
+    'remaining', greatest(0, daily_limit - new_count)
+  );
+end;
+$$;
+
+revoke all on function check_and_increment_tryons_anon(text, integer) from public;
+grant execute on function check_and_increment_tryons_anon(text, integer) to service_role;
