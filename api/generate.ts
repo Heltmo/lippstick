@@ -79,6 +79,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
+    let quotaReservation: null | { kind: 'user'; supabaseUser: any } | { kind: 'anon'; anonId: string; supabaseAdmin: any } = null;
+
     try {
         const { lipstickImage, selfieImage } = req.body;
 
@@ -120,11 +122,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
                 if (!usageData?.allowed) {
                     return res.status(429).json({
-                        error: `Daily limit reached (${usageData.count}/${usageData.limit}). Resets tomorrow.`,
+                        error: 'user_limit_reached',
+                        message: `Daily limit reached (${usageData.count}/${usageData.limit}). Resets tomorrow.`,
                         usage: usageData,
                     });
                 }
                 usedAuthenticatedQuota = true;
+                quotaReservation = { kind: 'user', supabaseUser };
             }
         }
 
@@ -140,10 +144,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
             if (!anonUsage?.allowed) {
                 return res.status(429).json({
-                    error: 'Anon limit reached. Sign in to continue.',
+                    error: 'anon_limit_reached',
+                    message: 'Anon limit reached. Sign in to continue.',
                     usage: anonUsage,
                 });
             }
+            quotaReservation = { kind: 'anon', anonId, supabaseAdmin };
         }
 
         const replicateKey = process.env.REPLICATE_API_TOKEN;
@@ -204,6 +210,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error('Generate API error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
         const errorMessage = error?.message || String(error);
+
+        const safetyFiltered =
+            errorMessage.toLowerCase().includes('flagged as sensitive') ||
+            errorMessage.includes('(E005)') ||
+            errorMessage.includes('E005');
+
+        if (safetyFiltered && quotaReservation) {
+            try {
+                if (quotaReservation.kind === 'anon') {
+                    await quotaReservation.supabaseAdmin.rpc('decrement_tryons_anon', { p_anon_id: quotaReservation.anonId });
+                } else {
+                    await quotaReservation.supabaseUser.rpc('decrement_tryons');
+                }
+            } catch (refundError) {
+                console.error('Quota refund failed:', refundError);
+            }
+
+            return res.status(400).json({
+                error: 'safety_filter',
+                message: 'The image was blocked by the safety filter. Please try different images.',
+            });
+        }
 
         if (errorMessage.includes('timeout')) {
             return res.status(408).json({ error: 'Request took too long. The model is processing - please try again in a moment.' });

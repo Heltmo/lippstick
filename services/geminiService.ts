@@ -20,7 +20,7 @@ export const generateTryOn = async (
     try {
       const sessionPromise = supabase.auth.getSession();
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Session timeout')), 2000)
+        setTimeout(() => reject(new Error('Session timeout')), 10000)
       );
       const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any;
       token = sessionData?.session?.access_token;
@@ -52,6 +52,12 @@ export const generateTryOn = async (
     if (!response.ok) {
       // Handle quota errors with specific messaging
       if (response.status === 429) {
+        if (data.error === 'anon_limit_reached') {
+          throw new Error(data.message || 'Sign in to continue');
+        }
+        if (data.error === 'user_limit_reached') {
+          throw new Error(data.message || 'Daily limit reached. Try again tomorrow!');
+        }
         if (data.usage) {
           throw new Error(
             `Daily limit reached (${data.usage.count}/${data.usage.limit}). Try again tomorrow!`

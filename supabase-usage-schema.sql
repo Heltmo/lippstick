@@ -216,6 +216,9 @@ grant execute on function decrement_tryons() to authenticated;
 revoke all on function check_and_increment_tryons_anon(text, integer) from public;
 revoke all on function decrement_tryons_anon(text) from public;
 
+grant execute on function check_and_increment_tryons_anon(text, integer) to service_role;
+grant execute on function decrement_tryons_anon(text) to service_role;
+
 -- Done.
 -- Vercel env vars you will use:
 -- SUPABASE_URL
