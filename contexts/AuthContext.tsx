@@ -113,6 +113,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             try {
                 console.log('[auth] Initializing auth...');
 
+                // Clean up old custom storageKey from previous configuration
+                if (localStorage.getItem('sb-auth-token')) {
+                    console.log('[auth] Removing old sb-auth-token key');
+                    localStorage.removeItem('sb-auth-token');
+                }
+
                 // Log localStorage keys to debug session persistence
                 const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase') || k.includes('sb-'));
                 console.log('[auth] localStorage keys found:', storageKeys);

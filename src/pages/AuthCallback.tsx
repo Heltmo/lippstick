@@ -33,6 +33,12 @@ export default function AuthCallback() {
             // Wait a bit for Supabase to persist the session to localStorage
             await new Promise(resolve => setTimeout(resolve, 200));
 
+            // Clean up old custom storageKey if it exists
+            if (localStorage.getItem('sb-auth-token')) {
+                console.log('⚠️ [auth-callback] Removing old sb-auth-token key');
+                localStorage.removeItem('sb-auth-token');
+            }
+
             // Check localStorage to verify session was persisted
             const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase') || k.includes('sb-'));
             console.log('✅ [auth-callback] localStorage keys after delay:', storageKeys);
