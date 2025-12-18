@@ -24,15 +24,26 @@ export default function AuthCallback() {
 
         let hasRedirected = false;
 
-        const completeSignIn = () => {
+        const completeSignIn = async () => {
             if (hasRedirected) return;
             hasRedirected = true;
 
             console.log('✅ [auth-callback] Sign in successful! Session created.');
 
+            // Wait a bit for Supabase to persist the session to localStorage
+            await new Promise(resolve => setTimeout(resolve, 200));
+
             // Check localStorage to verify session was persisted
-            const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase'));
-            console.log('✅ [auth-callback] localStorage keys:', storageKeys);
+            const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase') || k.includes('sb-'));
+            console.log('✅ [auth-callback] localStorage keys after delay:', storageKeys);
+
+            if (storageKeys.length === 0) {
+                console.warn('⚠️ [auth-callback] Session not persisted to localStorage yet, waiting longer...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const retryKeys = Object.keys(localStorage).filter(k => k.includes('supabase') || k.includes('sb-'));
+                console.log('✅ [auth-callback] localStorage keys after retry:', retryKeys);
+            }
 
             try {
                 sessionStorage.removeItem('postAuthRedirect');
@@ -63,14 +74,14 @@ export default function AuthCallback() {
 
             if (existingData.session) {
                 // Session already exists, redirect immediately
-                completeSignIn();
+                await completeSignIn();
                 return;
             }
 
             // No session yet, listen for SIGNED_IN event
             console.log('🔵 [auth-callback] No session yet, waiting for auth event...');
 
-            const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
                 console.log('🔵 [auth-callback] Auth state changed:', {
                     event,
                     hasSession: !!session,
@@ -79,7 +90,7 @@ export default function AuthCallback() {
                 });
 
                 if (event === 'SIGNED_IN' && session) {
-                    completeSignIn();
+                    await completeSignIn();
                 }
             });
 
@@ -97,7 +108,7 @@ export default function AuthCallback() {
                 }
 
                 if (data.session) {
-                    completeSignIn();
+                    await completeSignIn();
                 } else {
                     console.error('🔴 [auth-callback] No session found after timeout');
                     setErrorMessage('Failed to complete sign in. Please try again.');
