@@ -20,14 +20,17 @@ export default function AuthCallback() {
 
         const run = async () => {
             try {
-                // PKCE flow returns `?code=...` and requires an exchange to create a session.
-                const hasCode = new URLSearchParams(window.location.search).has('code');
-                if (hasCode) {
-                    const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-                    if (error) throw error;
-                } else {
-                    // Legacy implicit flow uses hash tokens; ensure SDK processes them.
-                    const { error } = await supabase.auth.getSession();
+                const params = new URLSearchParams(window.location.search);
+                const code = params.get('code');
+
+                // With `detectSessionInUrl: true`, Supabase will usually process the callback automatically
+                // during initialization. Prefer checking session first to avoid double-exchange (which
+                // clears the stored PKCE verifier and causes a 400).
+                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError) throw sessionError;
+
+                if (!sessionData.session && code) {
+                    const { error } = await supabase.auth.exchangeCodeForSession(code);
                     if (error) throw error;
                 }
 
