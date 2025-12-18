@@ -12,7 +12,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-        flowType: 'implicit',
+        // Google OAuth for SPAs uses the authorization code (PKCE) flow.
+        flowType: 'pkce',
         detectSessionInUrl: true,
         persistSession: true,
         autoRefreshToken: true,

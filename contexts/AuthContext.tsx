@@ -169,6 +169,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const signInWithGoogle = async () => {
+        // Remember where the user was, so we can send them back after OAuth completes.
+        try {
+            sessionStorage.setItem(
+                'postAuthRedirect',
+                window.location.pathname + window.location.search + window.location.hash
+            );
+        } catch {
+            // ignore (storage can be blocked)
+        }
+
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
