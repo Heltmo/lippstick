@@ -111,13 +111,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const initAuth = async () => {
             try {
-                const { data } = await supabase.auth.getSession();
+                console.log('[auth] Initializing auth...');
+                const { data, error } = await supabase.auth.getSession();
+
+                if (error) {
+                    console.error('[auth] Error getting session:', error);
+                }
 
                 if (!isMounted) return;
                 const initialSession = data.session;
-                if (isDev) {
-                    console.log('[auth] init getSession', { hasUser: !!initialSession?.user });
-                }
+
+                console.log('[auth] init getSession', {
+                    hasSession: !!initialSession,
+                    hasUser: !!initialSession?.user,
+                    userId: initialSession?.user?.id,
+                    email: initialSession?.user?.email
+                });
 
                 setSession(initialSession);
                 setUser(initialSession?.user ?? null);
@@ -136,9 +145,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initAuth();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-            if (isDev) {
-                console.log('[auth] onAuthStateChange', { event, hasUser: !!nextSession?.user });
-            }
+            console.log('[auth] onAuthStateChange', {
+                event,
+                hasSession: !!nextSession,
+                hasUser: !!nextSession?.user,
+                userId: nextSession?.user?.id,
+                email: nextSession?.user?.email
+            });
 
             setSession(nextSession);
             setUser(nextSession?.user ?? null);

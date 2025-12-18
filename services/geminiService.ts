@@ -18,10 +18,18 @@ export const generateTryOn = async (
     let token: string | undefined;
     try {
       const { data: sessionData, error } = await supabase.auth.getSession();
-      if (error) throw error;
+      if (error) {
+        console.error('[generateTryOn] Session error:', error);
+        throw error;
+      }
       token = sessionData?.session?.access_token;
+      console.log('[generateTryOn] Session status:', {
+        hasSession: !!sessionData?.session,
+        hasToken: !!token,
+        userId: sessionData?.session?.user?.id
+      });
     } catch (error) {
-      console.warn('Failed to get session, continuing without auth token:', error);
+      console.warn('[generateTryOn] Failed to get session, continuing without auth token:', error);
       // Continue without token - API will work for anonymous users
     }
 
@@ -32,11 +40,12 @@ export const generateTryOn = async (
     // Include auth token if user is logged in
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+      console.log('[generateTryOn] ✅ Sending request WITH auth token');
+    } else {
+      console.warn('[generateTryOn] ⚠️ Sending request WITHOUT auth token (will use anon quota)');
     }
 
-    if (import.meta?.env?.DEV) {
-      console.log('[generateTryOn] Authorization attached:', !!token);
-    }
+    console.log('[generateTryOn] Request headers:', { ...headers, Authorization: token ? 'Bearer ***' : undefined });
 
     const response = await fetch('/api/generate', {
       method: 'POST',

@@ -24,7 +24,7 @@ export default function AuthCallback() {
 
                 console.log('[auth-callback] Processing OAuth callback...');
 
-                // Wait a moment for Supabase SDK to process the URL hash
+                // Wait for Supabase SDK to process the URL hash (implicit flow)
                 await new Promise(resolve => setTimeout(resolve, 500));
 
                 // Verify session was created
