@@ -112,6 +112,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initAuth = async () => {
             try {
                 console.log('[auth] Initializing auth...');
+
+                // Log localStorage keys to debug session persistence
+                const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase') || k.includes('sb-'));
+                console.log('[auth] localStorage keys found:', storageKeys);
+
                 const { data, error } = await supabase.auth.getSession();
 
                 if (error) {
