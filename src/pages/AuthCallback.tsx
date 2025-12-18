@@ -30,8 +30,9 @@ export default function AuthCallback() {
 
             console.log('✅ [auth-callback] Sign in successful! Session created.');
 
-            // Wait a bit for Supabase to persist the session to localStorage
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Wait for Supabase to persist the session to localStorage
+            // Increased delay to ensure write completes before redirect
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Clean up old custom storageKey if it exists
             if (localStorage.getItem('sb-auth-token')) {

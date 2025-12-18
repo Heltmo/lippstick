@@ -18,11 +18,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    console.log('[auth] 🟦 AuthProvider mounting');
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const isDev = !!import.meta?.env?.DEV;
+    console.log('[auth] 🟦 Environment check:', {
+        isDev,
+        hasSupabaseUrl: !!import.meta?.env?.VITE_SUPABASE_URL,
+        hasSupabaseKey: !!import.meta?.env?.VITE_SUPABASE_ANON_KEY
+    });
 
     // Fetch or create user profile
     const fetchProfile = async (userId: string, email: string) => {
@@ -96,13 +102,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     useEffect(() => {
+        console.log('[auth] 🟦 useEffect running');
         let isMounted = true;
         const supabaseConfigured = !!import.meta?.env?.VITE_SUPABASE_URL && !!import.meta?.env?.VITE_SUPABASE_ANON_KEY;
+        console.log('[auth] 🟦 Supabase configured:', supabaseConfigured);
 
         if (!supabaseConfigured) {
-            if (isDev) {
-                console.log('[auth] supabase not configured; skipping auth init');
-            }
+            console.log('[auth] ⚠️ Supabase NOT configured - skipping auth init');
             setLoading(false);
             return () => {
                 isMounted = false;
