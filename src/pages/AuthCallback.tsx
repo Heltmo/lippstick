@@ -22,30 +22,12 @@ export default function AuthCallback() {
                     return;
                 }
 
-                console.log('[auth-callback] Processing OAuth callback...');
+                console.log('[auth-callback] Waiting for Supabase to process auth...');
 
-                // Wait for Supabase SDK to process the URL hash (implicit flow)
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // Just wait for Supabase's onAuthStateChange to fire
+                // It will automatically detect the session in the URL and redirect
+                // DO NOT call window.location.href here - it breaks implicit flow
 
-                // Verify session was created
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-                if (sessionError) {
-                    console.error('[auth-callback] Session error:', sessionError);
-                    setError('Failed to create session');
-                    setTimeout(() => window.location.href = '/', 3000);
-                    return;
-                }
-
-                if (!session) {
-                    console.warn('[auth-callback] No session found after callback');
-                    setError('No session created');
-                    setTimeout(() => window.location.href = '/', 3000);
-                    return;
-                }
-
-                console.log('[auth-callback] Session created successfully, redirecting...');
-                window.location.href = '/';
             } catch (err) {
                 console.error('[auth-callback] Unexpected error:', err);
                 setError('An unexpected error occurred');
@@ -54,6 +36,23 @@ export default function AuthCallback() {
         };
 
         handleCallback();
+
+        // Listen for auth state change
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            console.log('[auth-callback] Auth state changed:', event, !!session);
+
+            if (event === 'SIGNED_IN' && session) {
+                console.log('[auth-callback] Sign in detected, redirecting to home...');
+                // Small delay to ensure session is stored
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 500);
+            }
+        });
+
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
     if (error) {
