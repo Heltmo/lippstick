@@ -22,38 +22,27 @@ export default function AuthCallback() {
             return '/';
         })();
 
-        const run = async () => {
-            try {
-                // With detectSessionInUrl: true, Supabase automatically exchanges the code
-                // during client initialization. We need to wait a bit for this to complete.
-                console.log('🔵 [auth-callback] Waiting for automatic code exchange...');
+        let timeoutId: NodeJS.Timeout;
+        let hasRedirected = false;
 
-                // Wait for Supabase to process the URL
-                await new Promise(resolve => setTimeout(resolve, 500));
+        // Listen for auth state changes - this will fire when Supabase completes the automatic code exchange
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            console.log('🔵 [auth-callback] Auth state changed:', {
+                event,
+                hasSession: !!session,
+                userId: session?.user?.id,
+                email: session?.user?.email
+            });
 
-                console.log('🔵 [auth-callback] Checking for session after exchange...');
-                const { data, error } = await supabase.auth.getSession();
+            if (event === 'SIGNED_IN' && session && !hasRedirected) {
+                hasRedirected = true;
+                clearTimeout(timeoutId);
 
-                if (error) {
-                    console.error('🔴 [auth-callback] Session error:', error);
-                    throw error;
-                }
-
-                console.log('🔵 [auth-callback] Session check result:', {
-                    hasSession: !!data.session,
-                    userId: data.session?.user?.id,
-                    email: data.session?.user?.email,
-                    expiresAt: data.session?.expires_at
-                });
-
-                if (!data.session) {
-                    console.error('🔴 [auth-callback] No session found after OAuth callback');
-                    throw new Error('Failed to create session. Please try logging in again.');
-                }
+                console.log('✅ [auth-callback] Sign in successful! Session created.');
 
                 // Check localStorage to verify session was persisted
                 const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase'));
-                console.log('✅ [auth-callback] Session created! Storage keys:', storageKeys.length);
+                console.log('✅ [auth-callback] localStorage keys:', storageKeys);
 
                 try {
                     sessionStorage.removeItem('postAuthRedirect');
@@ -63,13 +52,43 @@ export default function AuthCallback() {
 
                 console.log('🔵 [auth-callback] Redirecting to:', returnTo);
                 window.location.replace(returnTo);
-            } catch (err: any) {
-                console.error('🔴 [auth-callback] OAuth callback error:', err);
-                setErrorMessage(err?.message || 'Could not complete sign in. Please try again.');
             }
-        };
+        });
 
-        void run();
+        // Fallback timeout in case the auth state change doesn't fire
+        timeoutId = setTimeout(async () => {
+            if (hasRedirected) return;
+
+            console.log('⚠️ [auth-callback] No SIGNED_IN event after 3 seconds, checking session manually...');
+            const { data, error } = await supabase.auth.getSession();
+
+            if (error) {
+                console.error('🔴 [auth-callback] Session error:', error);
+                setErrorMessage(error.message || 'Could not complete sign in. Please try again.');
+                return;
+            }
+
+            if (data.session && !hasRedirected) {
+                hasRedirected = true;
+                console.log('✅ [auth-callback] Found existing session, redirecting...');
+
+                try {
+                    sessionStorage.removeItem('postAuthRedirect');
+                } catch {
+                    // ignore
+                }
+
+                window.location.replace(returnTo);
+            } else {
+                console.error('🔴 [auth-callback] No session found after 3 seconds');
+                setErrorMessage('Failed to complete sign in. Please try again.');
+            }
+        }, 3000);
+
+        return () => {
+            clearTimeout(timeoutId);
+            subscription.unsubscribe();
+        };
     }, []);
 
     return (
