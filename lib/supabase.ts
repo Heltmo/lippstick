@@ -10,7 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
     console.error('Supabase credentials not configured');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+        flowType: 'implicit',
+        detectSessionInUrl: true,
+        persistSession: true,
+        autoRefreshToken: true,
+    },
+});
 
 // Types for our database
 export interface UserProfile {

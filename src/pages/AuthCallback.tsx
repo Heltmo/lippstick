@@ -1,49 +1,73 @@
 /**
  * Auth Callback - Handles OAuth redirect
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function AuthCallback() {
+    const [error, setError] = useState<string | null>(null);
+
     useEffect(() => {
         const handleCallback = async () => {
-            console.log('[auth-callback] starting code exchange');
-            console.log('[auth-callback] current URL:', window.location.href);
-
             try {
-                // Get code from URL params
+                // Check for error in URL params
                 const params = new URLSearchParams(window.location.search);
-                const code = params.get('code');
+                const errorParam = params.get('error');
+                const errorDescription = params.get('error_description');
 
-                if (!code) {
-                    console.error('[auth-callback] no code in URL');
-                    alert('Login failed: missing authorization code. Please try again.');
-                    window.location.href = '/';
+                if (errorParam) {
+                    console.error('[auth-callback] OAuth error:', errorParam, errorDescription);
+                    setError(errorDescription || 'Authentication failed');
+                    setTimeout(() => window.location.href = '/', 3000);
                     return;
                 }
 
-                console.log('[auth-callback] exchanging code for session');
-                const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+                console.log('[auth-callback] Processing OAuth callback...');
 
-                if (error) {
-                    console.error('[auth-callback] exchange failed:', error);
-                    alert(`Login failed: ${error.message}. Please try again.`);
-                } else {
-                    console.log('[auth-callback] exchange successful:', { hasSession: !!data?.session, hasUser: !!data?.session?.user });
+                // Wait a moment for Supabase SDK to process the URL hash
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Verify session was created
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+                if (sessionError) {
+                    console.error('[auth-callback] Session error:', sessionError);
+                    setError('Failed to create session');
+                    setTimeout(() => window.location.href = '/', 3000);
+                    return;
                 }
 
-                // Always redirect to home (session will be picked up by AuthContext)
-                console.log('[auth-callback] redirecting to home');
+                if (!session) {
+                    console.warn('[auth-callback] No session found after callback');
+                    setError('No session created');
+                    setTimeout(() => window.location.href = '/', 3000);
+                    return;
+                }
+
+                console.log('[auth-callback] Session created successfully, redirecting...');
                 window.location.href = '/';
             } catch (err) {
-                console.error('[auth-callback] unexpected error:', err);
-                alert(`Unexpected error during login. Please try again.`);
-                window.location.href = '/';
+                console.error('[auth-callback] Unexpected error:', err);
+                setError('An unexpected error occurred');
+                setTimeout(() => window.location.href = '/', 3000);
             }
         };
 
         handleCallback();
     }, []);
+
+    if (error) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cream-100 to-cream-200">
+                <div className="text-center max-w-md">
+                    <div className="text-5xl mb-4">⚠️</div>
+                    <p className="text-red-600 font-semibold mb-2">Sign in failed</p>
+                    <p className="text-gray-600 text-sm mb-4">{error}</p>
+                    <p className="text-gray-400 text-xs">Redirecting to home...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cream-100 to-cream-200">
