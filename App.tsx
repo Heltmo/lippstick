@@ -39,16 +39,24 @@ export default function App() {
 
    // Load tries from localStorage on mount / auth change
    useEffect(() => {
+      console.log('🟢 [App] User state changed:', {
+         hasUser: !!user,
+         userId: user?.id,
+         email: user?.email
+      });
+
       const dayKey = getUtcDayKey();
       if (!user) {
          const stored = localStorage.getItem(`freeTriesUsed:${dayKey}`);
          setFreeTriesUsed(stored ? parseInt(stored, 10) : 0);
          setSignedInTriesUsed(0);
+         console.log('🟢 [App] User is anonymous, free tries:', stored || 0);
       } else {
          setShowResultLock(false);
 
          const storedSignedIn = localStorage.getItem(`signedInTriesUsed:${user.id}:${dayKey}`);
          setSignedInTriesUsed(storedSignedIn ? parseInt(storedSignedIn, 10) : 0);
+         console.log('🟢 [App] User is logged in, signed-in tries:', storedSignedIn || 0);
       }
    }, [user]);
 
