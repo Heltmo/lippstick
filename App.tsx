@@ -11,8 +11,8 @@ import { useAuth } from './contexts/AuthContext';
 import LoginModal from './components/LoginModal';
 import AuthCallback from './src/pages/AuthCallback';
 
-const ANON_TRIES_LIMIT = 100; // Increased for testing
-const SIGNED_IN_TRIES_LIMIT = 100;
+const ANON_TRIES_LIMIT = 3;
+const SIGNED_IN_TRIES_LIMIT = 4;
 
 function getUtcDayKey() {
    return new Date().toISOString().slice(0, 10);

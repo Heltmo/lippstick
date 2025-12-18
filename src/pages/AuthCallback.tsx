@@ -10,8 +10,6 @@ export default function AuthCallback() {
     useEffect(() => {
         console.log('🔵 [auth-callback] Page loaded');
         console.log('🔵 [auth-callback] Full URL:', window.location.href);
-        console.log('🔵 [auth-callback] Search params:', window.location.search);
-        console.log('🔵 [auth-callback] Hash:', window.location.hash);
 
         const returnTo = (() => {
             try {
@@ -26,45 +24,36 @@ export default function AuthCallback() {
 
         const run = async () => {
             try {
-                const params = new URLSearchParams(window.location.search);
-                const code = params.get('code');
-                console.log('🔵 [auth-callback] Code param:', code ? 'EXISTS' : 'MISSING');
+                // With detectSessionInUrl: true, Supabase automatically exchanges the code
+                // during client initialization. We need to wait a bit for this to complete.
+                console.log('🔵 [auth-callback] Waiting for automatic code exchange...');
 
-                // With `detectSessionInUrl: true`, Supabase will usually process the callback automatically
-                // during initialization. Prefer checking session first to avoid double-exchange (which
-                // clears the stored PKCE verifier and causes a 400).
-                console.log('🔵 [auth-callback] Checking for existing session...');
-                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                // Wait for Supabase to process the URL
+                await new Promise(resolve => setTimeout(resolve, 500));
 
-                if (sessionError) {
-                    console.error('🔴 [auth-callback] Session check error:', sessionError);
-                    throw sessionError;
+                console.log('🔵 [auth-callback] Checking for session after exchange...');
+                const { data, error } = await supabase.auth.getSession();
+
+                if (error) {
+                    console.error('🔴 [auth-callback] Session error:', error);
+                    throw error;
                 }
 
-                console.log('🔵 [auth-callback] Existing session:', {
-                    hasSession: !!sessionData.session,
-                    userId: sessionData.session?.user?.id,
-                    expiresAt: sessionData.session?.expires_at
+                console.log('🔵 [auth-callback] Session check result:', {
+                    hasSession: !!data.session,
+                    userId: data.session?.user?.id,
+                    email: data.session?.user?.email,
+                    expiresAt: data.session?.expires_at
                 });
 
-                if (!sessionData.session && code) {
-                    console.log('🔵 [auth-callback] No session found, exchanging code...');
-                    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-
-                    if (exchangeError) {
-                        console.error('🔴 [auth-callback] Code exchange failed:', exchangeError);
-                        throw exchangeError;
-                    }
-
-                    console.log('✅ [auth-callback] Code exchange successful:', {
-                        hasSession: !!exchangeData.session,
-                        userId: exchangeData.session?.user?.id
-                    });
+                if (!data.session) {
+                    console.error('🔴 [auth-callback] No session found after OAuth callback');
+                    throw new Error('Failed to create session. Please try logging in again.');
                 }
 
-                // Check localStorage to see if session was stored
+                // Check localStorage to verify session was persisted
                 const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase'));
-                console.log('🔵 [auth-callback] localStorage keys:', storageKeys);
+                console.log('✅ [auth-callback] Session created! Storage keys:', storageKeys.length);
 
                 try {
                     sessionStorage.removeItem('postAuthRedirect');
@@ -76,11 +65,6 @@ export default function AuthCallback() {
                 window.location.replace(returnTo);
             } catch (err: any) {
                 console.error('🔴 [auth-callback] OAuth callback error:', err);
-                console.error('🔴 [auth-callback] Error details:', {
-                    message: err?.message,
-                    status: err?.status,
-                    code: err?.code
-                });
                 setErrorMessage(err?.message || 'Could not complete sign in. Please try again.');
             }
         };
